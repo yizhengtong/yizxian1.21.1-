@@ -1,13 +1,1 @@
-{
-  "itemGroup.yizxianmod": "Example Mod Tab",
-  "block.yizxianmod.example_block": "Example Block",
-  "item.yizxianmod.example_item": "Example Item",
-
-  "yizxianmod.configuration.title": "Yiz xian Mod Configs",
-  "yizxianmod.configuration.section.yizxianmod.common.toml": "Yiz xian Mod Configs",
-  "yizxianmod.configuration.section.yizxianmod.common.toml.title": "Yiz xian Mod Configs",
-  "yizxianmod.configuration.items": "Item List",
-  "yizxianmod.configuration.logDirtBlock": "Log Dirt Block",
-  "yizxianmod.configuration.magicNumberIntroduction": "Magic Number Text",
-  "yizxianmod.configuration.magicNumber": "Magic Number"
-}
+{}

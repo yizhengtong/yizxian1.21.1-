@@ -27,7 +27,8 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    // yiz-qzk library mod — built locally in sibling project
+    flatDir { dirs '../yiz1.21.1/build/libs' }
 }
 
 base {
@@ -118,6 +119,8 @@ configurations {
 }
 
 dependencies {
+    // yiz-qzk library mod — provides API, effects, damage, health, UI framework
+    implementation "net.minecraft.client.yiz:yizmodqzk:1.0.0"
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
@@ -148,6 +151,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
             neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
