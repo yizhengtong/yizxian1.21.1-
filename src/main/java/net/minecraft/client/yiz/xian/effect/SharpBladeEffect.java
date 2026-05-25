@@ -63,7 +63,7 @@ public class SharpBladeEffect extends AbstractEffect {
 
     @Override
     public List<String> getTalentDetailLines(LivingEntity entity) {
-        return List.of("§6利刃：增加武器 §e" + (getLevel() * 15) + "% §6基础伤害");
+        return List.of("§6利刃: §e每级 +15% §6基础伤害");
     }
 
     /** 读取物品上此效果的当前等级 */
