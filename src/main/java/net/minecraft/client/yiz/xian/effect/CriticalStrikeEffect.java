@@ -28,8 +28,6 @@ public class CriticalStrikeEffect extends AbstractEffect {
     public static final String DATA_TIMER = "yizxianmod:crit_timer";
     public static final String DATA_TARGET = "yizxianmod:crit_target";
     private static final int LOCK_TICKS = 50; // 2.5秒
-    private static final ResourceLocation LOCK_ICON =
-        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
     private static final double RANGE = 8.0;
 
     public CriticalStrikeEffect(int level) {
@@ -64,8 +62,10 @@ public class CriticalStrikeEffect extends AbstractEffect {
         int newTimer = Math.min(timer + 1, LOCK_TICKS);
         PlayerDataAPI.set(player, DATA_TIMER, newTimer);
         PlayerDataAPI.set(player, DATA_TARGET, target.getUUID().toString());
-        // 显示锁定图标
-        EntityLockAPI.lock(player, target, LOCK_ICON);
+        // 充能进度 + 就绪状态传给渲染
+        float charge = (float) newTimer / LOCK_TICKS;
+        boolean ready = newTimer >= LOCK_TICKS;
+        EntityLockAPI.lock(player, target, charge, ready);
     }
 
     @Override
