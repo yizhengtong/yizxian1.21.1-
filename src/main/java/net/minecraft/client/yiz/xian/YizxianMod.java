@@ -53,7 +53,7 @@ public class YizxianMod {
         ITEMS.register(modEventBus);
 
         // ---- 效果注册（构造函数自动注册到 ModRegistries） ----
-        new SharpBladeEffect(1);
+        new SharpBladeEffect(5);
         LOGGER.info("SharpBladeEffect registered");
 
         // ---- yiz-qzk integration ----
