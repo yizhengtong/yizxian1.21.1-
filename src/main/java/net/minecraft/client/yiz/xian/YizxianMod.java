@@ -9,6 +9,7 @@ import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect;
+import net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider;
 import net.minecraft.client.yiz.xian.effect.SharpBladeEffect;
 import net.minecraft.client.yiz.xian.item.GeneralItemItem;
 import net.minecraft.client.yiz.xian.item.SkillScrollItem;
@@ -123,8 +124,9 @@ public class YizxianMod {
             EntityASMUtil.modifyHealth(target, -bonusDmg);
         }
 
-        // 重置锁定（API unlock 由 reset 内部调用）
+        // 重置锁定
         CriticalStrikeEffect.reset(player);
+        CriticalStrikeProvider.reset(player);
     }
 
     private void onPlayerTick(PlayerTickEvent.Post event) {
