@@ -22,6 +22,7 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
 
     // 每个玩家独立的锁定状态
     private static final ConcurrentHashMap<UUID, LockState> STATES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, Long> LAST_FRAME = new ConcurrentHashMap<>();
 
     private record LockState(UUID targetUuid, int timer) {}
 
@@ -30,7 +31,7 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return null;
 
-        // 60° 锥扫描最近实体（复刻母模板）
+        // 60° 锥扫描（复刻母模板）
         Vec3 eye = player.getEyePosition();
         var look = player.getLookAngle();
         Entity best = null;
@@ -46,17 +47,22 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
 
         LockState state = STATES.get(player.getUUID());
         if (best == null) {
-            // 丢失目标 → 重置充能
             STATES.remove(player.getUUID());
+            LAST_FRAME.remove(player.getUUID());
             return null;
         }
 
+        // 防止同帧多次调用（Manager + Renderer 各调一次）
+        long frame = mc.level.getGameTime();
+        Long prev = LAST_FRAME.get(player.getUUID());
+        boolean sameFrame = prev != null && prev == frame;
+        LAST_FRAME.put(player.getUUID(), frame);
+        if (sameFrame) return best;
+
         int timer;
         if (state != null && state.targetUuid.equals(best.getUUID())) {
-            // 同一目标，继续充能
             timer = Math.min(state.timer + 1, CHARGE_TICKS);
         } else {
-            // 新目标，重新充能
             timer = 1;
         }
         STATES.put(player.getUUID(), new LockState(best.getUUID(), timer));
