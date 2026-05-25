@@ -7,6 +7,7 @@ import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.effect.perception.EntityPerception;
 import net.minecraft.client.yiz.effect.unlock.UnlockManager;
 import net.minecraft.client.yiz.network.NetworkHandler;
+import net.minecraft.client.yiz.xian.effect.SharpBladeEffect;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -101,6 +102,8 @@ public class TalentCoreItem extends Item implements ITalentItem {
                 }
             }
         }
+        // 等级变动后立即重算物品属性
+        SharpBladeEffect.recalculate(target);
     }
 
     /** 从物品 NBT 读取容器内效果 ID */

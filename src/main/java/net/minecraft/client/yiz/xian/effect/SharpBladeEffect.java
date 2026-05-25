@@ -43,12 +43,17 @@ public class SharpBladeEffect extends AbstractEffect {
 
     @Override
     public void execute(EffectContext context) {
-        ItemStack stack = context.itemStack();
+        // 效果由 recalculate() 驱动，execute 在此保留但不在每 tick 调度
+    }
+
+    /**
+     * 重算该物品上利刃效果的攻击力加成。
+     * 每次等级变动后调用，取代每 tick 调度。
+     */
+    public static void recalculate(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return;
 
         int level = readStoredLevel(stack);
-        if (level <= 0) return;
-
         double baseDmg = getBaseDamage(stack);
         if (baseDmg <= 0) return;
 
