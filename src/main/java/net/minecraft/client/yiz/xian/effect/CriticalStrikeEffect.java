@@ -56,16 +56,19 @@ public class CriticalStrikeEffect extends AbstractEffect {
         if (target == null || !target.isAlive()) {
             if (timer > 0) EntityLockAPI.unlock(player);
             reset(player);
+            if (player.tickCount % 40 == 0)
+                net.minecraft.client.yiz.tizMod.LOGGER.info("[CRIT] no target, timer={}", timer);
             return;
         }
 
         int newTimer = Math.min(timer + 1, LOCK_TICKS);
         PlayerDataAPI.set(player, DATA_TIMER, newTimer);
         PlayerDataAPI.set(player, DATA_TARGET, target.getUUID().toString());
-        // 充能进度 + 就绪状态传给渲染
         float charge = (float) newTimer / LOCK_TICKS;
         boolean ready = newTimer >= LOCK_TICKS;
         EntityLockAPI.lock(player, target, charge, ready);
+        if (player.tickCount % 20 == 0)
+            net.minecraft.client.yiz.tizMod.LOGGER.info("[CRIT] locking {} charge={} ready={}", target.getName().getString(), charge, ready);
     }
 
     @Override
