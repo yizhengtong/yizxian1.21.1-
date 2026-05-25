@@ -89,6 +89,17 @@ public class TalentCoreItem extends Item implements ITalentItem {
         } else {
             int current = EffectNBTHandler.getEffectLevel(target, effectId);
             EffectNBTHandler.setEffectLevel(target, effectId, Math.min(current + 1, maxLevel));
+            // 首次应用时记录武器基准伤害
+            if (current <= 0) {
+                double base = net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getAttackDamage(target);
+                if (base > 0) {
+                    var existing = target.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+                    net.minecraft.nbt.CompoundTag tag = existing != null ? existing.copyTag() : new net.minecraft.nbt.CompoundTag();
+                    tag.putDouble("yizmodqzk:sharp_blade_base", base);
+                    target.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                        net.minecraft.world.item.component.CustomData.of(tag));
+                }
+            }
         }
     }
 

@@ -23,6 +23,7 @@ public class SharpBladeEffect extends AbstractEffect {
     private static final String MODID = "yizxianmod";
     private static final String EFF_ID = "sharp_blade";
     private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(MODID, EFF_ID);
+    private static final String BASE_DMG_KEY = "yizmodqzk:sharp_blade_base";
 
     public SharpBladeEffect(int level) {
         super(
@@ -44,29 +45,55 @@ public class SharpBladeEffect extends AbstractEffect {
     public void execute(EffectContext context) {
         ItemStack stack = context.itemStack();
         if (stack == null || stack.isEmpty()) return;
+
         int level = readStoredLevel(stack);
-        double amp = level * 15.0;
-        ItemAttributeHandler.setDamageAmplification(stack, amp);
+        if (level <= 0) return;
+
+        double baseDmg = getBaseDamage(stack);
+        if (baseDmg <= 0) return;
+
+        double newDmg = baseDmg * (1.0 + level * 0.15);
+        ItemAttributeHandler.setAttackDamage(stack, newDmg);
     }
 
     @Override
     public List<String> getTalentDetailLines(LivingEntity entity) {
-        return List.of("§6利刃：增加武器 §e" + (getLevel() * 15) + "% §6伤害");
+        return List.of("§6利刃：增加武器 §e" + (getLevel() * 15) + "% §6基础伤害");
     }
 
-    private int readStoredLevel(ItemStack stack) {
+    /** 读取物品上此效果的当前等级 */
+    public static int readStoredLevel(ItemStack stack) {
         CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
-        if (cd == null) return getLevel();
+        if (cd == null) return 0;
         CompoundTag tag = cd.copyTag();
-        if (!tag.contains("yizmodqzk:effects", Tag.TAG_LIST)) return getLevel();
+        if (!tag.contains("yizmodqzk:effects", Tag.TAG_LIST)) return 0;
         ListTag list = tag.getList("yizmodqzk:effects", Tag.TAG_COMPOUND);
-        String myId = getId().toString();
+        String myId = ID.toString();
         for (int i = 0; i < list.size(); i++) {
             CompoundTag t = list.getCompound(i);
             if (myId.equals(t.getString("id"))) {
                 return Math.max(1, t.getInt("level"));
             }
         }
-        return getLevel();
+        return 0;
+    }
+
+    /** 获取武器基准伤害（首次读取时记录当前面板值） */
+    private static double getBaseDamage(ItemStack stack) {
+        CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
+        if (cd != null) {
+            CompoundTag tag = cd.copyTag();
+            if (tag.contains(BASE_DMG_KEY)) {
+                return tag.getDouble(BASE_DMG_KEY);
+            }
+        }
+        // 第一次访问：记录当前面板伤害为基准
+        double current = ItemAttributeHandler.getAttackDamage(stack);
+        if (current <= 0) return 0;
+        // 写入基准值
+        CompoundTag tag = cd != null ? cd.copyTag() : new CompoundTag();
+        tag.putDouble(BASE_DMG_KEY, current);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        return current;
     }
 }
