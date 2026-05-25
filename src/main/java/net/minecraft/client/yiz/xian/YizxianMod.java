@@ -21,6 +21,7 @@ import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
 import net.minecraft.client.yiz.xian.realm.RealmStages;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -103,30 +104,20 @@ public class YizxianMod {
         String targetUuid = CriticalStrikeEffect.getTargetUuid(player);
         if (targetUuid.isEmpty()) return;
 
-        Entity targetEntity = player.level().getPlayerByUUID(UUID.fromString(targetUuid));
-        if (!(targetEntity instanceof LivingEntity target)) return;
-        if (!target.isAlive()) return;
+        Entity targetEntity = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
+        if (!(targetEntity instanceof LivingEntity target) || !target.isAlive()) return;
 
-        // 获取原始伤害值并取消原伤害（全部用 API 手动处理）
         float baseDamage = event.getOriginalDamage();
         event.setNewDamage(0);
 
-        // 突进
         var dir = target.position().subtract(player.position()).normalize();
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
 
-        // 2倍真实伤害（绕过护甲/抗性）
-        YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
-
-        // 额外改血伤害
         int level = CriticalStrikeEffect.getPlayerLevel(player);
-        float bonusDmg = baseDamage * level;
-        if (bonusDmg > 0) {
-            EntityASMUtil.modifyHealth(target, -bonusDmg);
-        }
+        YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
+        EntityASMUtil.modifyHealth(target, -(baseDamage * level));
 
-        // 重置锁定
         CriticalStrikeEffect.reset(player);
         CriticalStrikeProvider.reset(player);
     }
