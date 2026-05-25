@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 
 import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
+import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect;
@@ -106,20 +107,21 @@ public class YizxianMod {
         if (!(targetEntity instanceof LivingEntity target)) return;
         if (!target.isAlive()) return;
 
-        // 获取原始伤害值
+        // 获取原始伤害值并取消原伤害（全部用 API 手动处理）
         float baseDamage = event.getOriginalDamage();
-
-        // 修改伤害为2倍
-        event.setNewDamage(baseDamage * 2);
+        event.setNewDamage(0);
 
         // 突进
         var dir = target.position().subtract(player.position()).normalize();
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
 
-        // 额外改血伤害（绕过防御）
+        // 2倍真实伤害（绕过护甲/抗性）
+        YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
+
+        // 额外改血伤害
         int level = CriticalStrikeEffect.getPlayerLevel(player);
-        float bonusDmg = baseDamage * 0.05f * level;
+        float bonusDmg = baseDamage * level;
         if (bonusDmg > 0) {
             EntityASMUtil.modifyHealth(target, -bonusDmg);
         }
