@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.xian.effect;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.yiz.api.TargetFrameProvider;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -87,6 +88,19 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
 
     @Override
     public int getPriority() { return 10; }
+
+    // 满蓄力用母模板2纹理
+    private static final ResourceLocation[] READY_TEX = {
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_tr.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_tl.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_bl.png"),
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock2_br.png"),
+    };
+
+    @Override
+    public ResourceLocation[] getCornerTextures() {
+        return isReady() ? READY_TEX : null; // null=用默认
+    }
 
     /** 攻击后重置 */
     public static void reset(Player player) {

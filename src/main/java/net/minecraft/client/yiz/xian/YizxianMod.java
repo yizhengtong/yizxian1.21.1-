@@ -120,6 +120,14 @@ public class YizxianMod {
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
 
+        // 强制朝向目标（镜头自动对准）
+        float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        float pitch = (float) Math.toDegrees(-Math.asin(dir.y));
+        player.setYRot(yaw);
+        player.setXRot(pitch);
+        player.yRotO = yaw;
+        player.xRotO = pitch;
+
         int level = CriticalStrikeEffect.getPlayerLevel(player);
         YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
         EntityASMUtil.modifyHealth(target, -(baseDamage * level));
