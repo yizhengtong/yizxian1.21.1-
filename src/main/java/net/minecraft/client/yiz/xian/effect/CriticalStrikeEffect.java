@@ -12,6 +12,9 @@ import net.minecraft.client.yiz.effect.perception.EntityPerception;
 import net.minecraft.client.yiz.effect.rarity.Rarity;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
@@ -63,6 +66,10 @@ public class CriticalStrikeEffect extends AbstractEffect {
         PlayerDataAPI.set(player, DATA_TIMER, newTimer);
         PlayerDataAPI.set(player, DATA_TARGET, target.getUUID().toString());
         EntityLockAPI.lock(player, target, (float) newTimer / LOCK_TICKS, newTimer >= LOCK_TICKS);
+        // 充能完成音效
+        if (timer < LOCK_TICKS && newTimer >= LOCK_TICKS && player instanceof ServerPlayer sp) {
+            sp.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.0f);
+        }
     }
 
     @Override
