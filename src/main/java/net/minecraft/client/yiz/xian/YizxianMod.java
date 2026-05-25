@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.xian;
 
 import com.mojang.serialization.Codec;
+import java.lang.reflect.Field;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -23,7 +24,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -95,7 +95,10 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
     }
 
-    /** 玩家攻击拦截 — 会心一击触发 */
+    // 跟踪 attackStrengthTicker 以检测攻击触发
+    private final java.util.Map<UUID, Integer> prevAttackTicker = new java.util.HashMap<>();
+
+    /** 玩家攻击拦截 — 会心一击触发（按攻击键自动突进至锁定目标） */
     private void onLivingDamage(LivingDamageEvent.Pre event) {
         if (!(event.getSource().getEntity() instanceof Player player)) return;
         if (player.level().isClientSide) return;
@@ -109,7 +112,10 @@ public class YizxianMod {
 
         float baseDamage = event.getOriginalDamage();
         event.setNewDamage(0);
+        executeCrit(player, target, baseDamage);
+    }
 
+    private void executeCrit(Player player, LivingEntity target, float baseDamage) {
         var dir = target.position().subtract(player.position()).normalize();
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
@@ -122,10 +128,39 @@ public class YizxianMod {
         CriticalStrikeProvider.reset(player);
     }
 
+    // attackStrengthTicker 是 protected，反射读取
+    private static final Field ATK_TICKER_FIELD = getAttackTickerField();
+    private static Field getAttackTickerField() {
+        try {
+            Field f = Player.class.getDeclaredField("attackStrengthTicker");
+            f.setAccessible(true);
+            return f;
+        } catch (Exception e) { return null; }
+    }
+
+    /** 攻击键触发（不依赖命中 —— attackStrengthTicker 重置检测） */
+    private void checkCritSwing(ServerPlayer player) {
+        int ticker;
+        try { ticker = ATK_TICKER_FIELD != null ? ATK_TICKER_FIELD.getInt(player) : -1; }
+        catch (Exception e) { return; }
+        Integer prev = prevAttackTicker.get(player.getUUID());
+        if (prev != null && prev > 0 && ticker == 0 && CriticalStrikeEffect.isReady(player)) {
+            String uuid = CriticalStrikeEffect.getTargetUuid(player);
+            if (uuid.isEmpty()) return;
+            Entity e = ((ServerLevel) player.level()).getEntity(UUID.fromString(uuid));
+            if (e instanceof LivingEntity target && target.isAlive()) {
+                float baseDmg = (float) player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+                executeCrit(player, target, baseDmg);
+            }
+        }
+        prevAttackTicker.put(player.getUUID(), ticker);
+    }
+
     private void onPlayerTick(PlayerTickEvent.Post event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             BreakthroughHandler.checkAndBreakthrough(serverPlayer);
             RealmAttributeHandler.applyHealthRegen(serverPlayer);
+            checkCritSwing(serverPlayer);
         }
     }
 
