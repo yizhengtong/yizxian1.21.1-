@@ -2,22 +2,21 @@ package net.minecraft.client.yiz.xian.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.api.RealmStage;
+import net.minecraft.client.yiz.xian.item.TalentCoreItem;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.List;
 
-/**
- * /yizxian jj 1-4 — 测试用，直接设置玩家境界。
- *
- * 1 = 筑命, 2 = 谌我, 3 = 揖别, 4 = 证我
- */
 public final class YizxianCommand {
 
     private YizxianCommand() {}
@@ -30,7 +29,44 @@ public final class YizxianCommand {
                         .executes(YizxianCommand::setRealmStage)
                     )
                 )
+                .then(Commands.literal("talent")
+                    .then(Commands.argument("effect_id", StringArgumentType.string())
+                        .then(Commands.argument("max_level", IntegerArgumentType.integer(1, 100))
+                            .executes(YizxianCommand::giveTalent)
+                        )
+                    )
+                )
         );
+    }
+
+    /** /yizxian talent <effect_id> <max_level> — 给玩家一个含指定效果的 talent_core */
+    private static int giveTalent(CommandContext<CommandSourceStack> ctx) {
+        String effectIdStr = StringArgumentType.getString(ctx, "effect_id");
+        int maxLevel = IntegerArgumentType.getInteger(ctx, "max_level");
+        CommandSourceStack source = ctx.getSource();
+
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Component.literal("这条指令只能玩家用"));
+            return 0;
+        }
+
+        ResourceLocation effectId = ResourceLocation.parse(effectIdStr);
+        ItemStack stack = new ItemStack(
+            net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .get(ResourceLocation.fromNamespaceAndPath("yizxianmod", "talent_core"))
+        );
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.literal("talent_core 物品未注册"));
+            return 0;
+        }
+
+        TalentCoreItem.setContainedEffect(stack, effectId, maxLevel);
+        player.getInventory().add(stack);
+        source.sendSuccess(
+            () -> Component.literal("已给予 talent_core [%s] 最大等级 %d".formatted(effectIdStr, maxLevel)),
+            true
+        );
+        return 1;
     }
 
     private static int setRealmStage(CommandContext<CommandSourceStack> ctx) {
