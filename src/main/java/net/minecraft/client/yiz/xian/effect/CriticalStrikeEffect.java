@@ -1,6 +1,8 @@
 package net.minecraft.client.yiz.xian.effect;
 
+import net.minecraft.client.yiz.api.EntityLockAPI;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.effect.AbstractEffect;
 import net.minecraft.client.yiz.xian.item.TalentLevelTracker;
@@ -26,6 +28,8 @@ public class CriticalStrikeEffect extends AbstractEffect {
     public static final String DATA_TIMER = "yizxianmod:crit_timer";
     public static final String DATA_TARGET = "yizxianmod:crit_target";
     private static final int LOCK_TICKS = 50; // 2.5秒
+    private static final ResourceLocation LOCK_ICON =
+        ResourceLocation.fromNamespaceAndPath("yizmodqzk", "textures/gui/lock_icon.png");
     private static final double RANGE = 8.0;
 
     public CriticalStrikeEffect(int level) {
@@ -52,6 +56,7 @@ public class CriticalStrikeEffect extends AbstractEffect {
         int timer = PlayerDataAPI.get(player, DATA_TIMER);
 
         if (target == null || !target.isAlive()) {
+            if (timer > 0) EntityLockAPI.unlock(player);
             reset(player);
             return;
         }
@@ -59,6 +64,8 @@ public class CriticalStrikeEffect extends AbstractEffect {
         int newTimer = Math.min(timer + 1, LOCK_TICKS);
         PlayerDataAPI.set(player, DATA_TIMER, newTimer);
         PlayerDataAPI.set(player, DATA_TARGET, target.getUUID().toString());
+        // 显示锁定图标
+        EntityLockAPI.lock(player, target, LOCK_ICON);
     }
 
     @Override
@@ -93,6 +100,7 @@ public class CriticalStrikeEffect extends AbstractEffect {
     public static void reset(Player player) {
         PlayerDataAPI.set(player, DATA_TIMER, 0);
         PlayerDataAPI.set(player, DATA_TARGET, "");
+        EntityLockAPI.unlock(player);
     }
 
     /** 8格内最近存活且有视线的目标 */

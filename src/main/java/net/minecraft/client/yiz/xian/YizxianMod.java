@@ -123,7 +123,7 @@ public class YizxianMod {
             EntityASMUtil.modifyHealth(target, -bonusDmg);
         }
 
-        // 重置锁定
+        // 重置锁定（API unlock 由 reset 内部调用）
         CriticalStrikeEffect.reset(player);
     }
 
