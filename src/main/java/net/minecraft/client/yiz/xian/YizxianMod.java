@@ -1,7 +1,6 @@
 package net.minecraft.client.yiz.xian;
 
 import com.mojang.serialization.Codec;
-import java.lang.reflect.Field;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -34,6 +33,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -93,12 +94,11 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
+        NeoForge.EVENT_BUS.addListener(this::onAttackEntity);
+        NeoForge.EVENT_BUS.addListener(this::onLeftClickEmpty);
     }
 
-    // 跟踪 attackStrengthTicker 以检测攻击触发
-    private final java.util.Map<UUID, Integer> prevAttackTicker = new java.util.HashMap<>();
-
-    /** 玩家攻击拦截 — 会心一击触发（按攻击键自动突进至锁定目标） */
+    /** 会心一击触发：命中实体 → 拦截重定向到锁定目标 */
     private void onLivingDamage(LivingDamageEvent.Pre event) {
         if (!(event.getSource().getEntity() instanceof Player player)) return;
         if (player.level().isClientSide) return;
@@ -115,18 +115,43 @@ public class YizxianMod {
         executeCrit(player, target, baseDamage);
     }
 
+    /** 会心一击触发：攻击实体 → 取消原攻击，转向锁定目标 */
+    private void onAttackEntity(AttackEntityEvent event) {
+        if (event.getEntity().level().isClientSide) return;
+        if (!CriticalStrikeEffect.isReady(event.getEntity())) return;
+
+        String targetUuid = CriticalStrikeEffect.getTargetUuid(event.getEntity());
+        if (targetUuid.isEmpty()) return;
+        Entity e = ((ServerLevel) event.getEntity().level()).getEntity(UUID.fromString(targetUuid));
+        if (!(e instanceof LivingEntity target) || !target.isAlive()) return;
+
+        event.setCanceled(true);
+        float baseDmg = (float) event.getEntity().getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+        executeCrit(event.getEntity(), target, baseDmg);
+    }
+
+    /** 会心一击触发：空砍 → 转向锁定目标 */
+    private void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
+        if (event.getEntity().level().isClientSide) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!CriticalStrikeEffect.isReady(player)) return;
+
+        String targetUuid = CriticalStrikeEffect.getTargetUuid(player);
+        if (targetUuid.isEmpty()) return;
+        Entity e = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
+        if (!(e instanceof LivingEntity target) || !target.isAlive()) return;
+
+        float baseDmg = (float) player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+        executeCrit(player, target, baseDmg);
+    }
+
     private void executeCrit(Player player, LivingEntity target, float baseDamage) {
         var dir = target.position().subtract(player.position()).normalize();
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
 
-        // 强制朝向目标（镜头自动对准）
-        float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-        float pitch = (float) Math.toDegrees(-Math.asin(dir.y));
-        player.setYRot(yaw);
-        player.setXRot(pitch);
-        player.yRotO = yaw;
-        player.xRotO = pitch;
+        // 视线转向目标
+        player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, target.getEyePosition());
 
         int level = CriticalStrikeEffect.getPlayerLevel(player);
         YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
@@ -136,42 +161,10 @@ public class YizxianMod {
         CriticalStrikeProvider.reset(player);
     }
 
-    // attackStrengthTicker 在 LivingEntity 上（protected），反射获取
-    private static final Field ATK_TICKER_FIELD = findAttackTickerField();
-    private static Field findAttackTickerField() {
-        for (Class<?> c = Player.class; c != Object.class; c = c.getSuperclass()) {
-            try {
-                Field f = c.getDeclaredField("attackStrengthTicker");
-                f.setAccessible(true);
-                return f;
-            } catch (NoSuchFieldException ignored) {}
-        }
-        return null;
-    }
-
-    /** 攻击键触发（不依赖命中 —— attackStrengthTicker 重置检测） */
-    private void checkCritSwing(ServerPlayer player) {
-        int ticker;
-        try { ticker = ATK_TICKER_FIELD != null ? ATK_TICKER_FIELD.getInt(player) : -1; }
-        catch (Exception e) { return; }
-        Integer prev = prevAttackTicker.get(player.getUUID());
-        if (prev != null && prev > 0 && ticker == 0 && CriticalStrikeEffect.isReady(player)) {
-            String uuid = CriticalStrikeEffect.getTargetUuid(player);
-            if (uuid.isEmpty()) return;
-            Entity e = ((ServerLevel) player.level()).getEntity(UUID.fromString(uuid));
-            if (e instanceof LivingEntity target && target.isAlive()) {
-                float baseDmg = (float) player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-                executeCrit(player, target, baseDmg);
-            }
-        }
-        prevAttackTicker.put(player.getUUID(), ticker);
-    }
-
     private void onPlayerTick(PlayerTickEvent.Post event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             BreakthroughHandler.checkAndBreakthrough(serverPlayer);
             RealmAttributeHandler.applyHealthRegen(serverPlayer);
-            checkCritSwing(serverPlayer);
         }
     }
 
