@@ -136,14 +136,17 @@ public class YizxianMod {
         CriticalStrikeProvider.reset(player);
     }
 
-    // attackStrengthTicker 是 protected，反射读取
-    private static final Field ATK_TICKER_FIELD = getAttackTickerField();
-    private static Field getAttackTickerField() {
-        try {
-            Field f = Player.class.getDeclaredField("attackStrengthTicker");
-            f.setAccessible(true);
-            return f;
-        } catch (Exception e) { return null; }
+    // attackStrengthTicker 在 LivingEntity 上（protected），反射获取
+    private static final Field ATK_TICKER_FIELD = findAttackTickerField();
+    private static Field findAttackTickerField() {
+        for (Class<?> c = Player.class; c != Object.class; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField("attackStrengthTicker");
+                f.setAccessible(true);
+                return f;
+            } catch (NoSuchFieldException ignored) {}
+        }
+        return null;
     }
 
     /** 攻击键触发（不依赖命中 —— attackStrengthTicker 重置检测） */
