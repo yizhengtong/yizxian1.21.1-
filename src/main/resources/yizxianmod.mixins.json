@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "net.minecraft.client.yiz.xian.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "HealMixin",
+    "KillBypassMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
