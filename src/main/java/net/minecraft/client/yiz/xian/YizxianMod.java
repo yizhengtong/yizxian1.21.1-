@@ -33,8 +33,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
-import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -94,64 +92,38 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
-        NeoForge.EVENT_BUS.addListener(this::onAttackEntity);
-        NeoForge.EVENT_BUS.addListener(this::onLeftClickEmpty);
     }
 
-    /** 会心一击触发：命中实体 → 拦截重定向到锁定目标 */
+    /** 会心一击：攻击命中 → 未满充重置 / 满充突进+伤害 */
     private void onLivingDamage(LivingDamageEvent.Pre event) {
         if (!(event.getSource().getEntity() instanceof Player player)) return;
         if (player.level().isClientSide) return;
-        if (!CriticalStrikeEffect.isReady(player)) return;
 
-        String targetUuid = CriticalStrikeEffect.getTargetUuid(player);
-        if (targetUuid.isEmpty()) return;
-
-        Entity targetEntity = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
-        if (!(targetEntity instanceof LivingEntity target) || !target.isAlive()) return;
+        if (!CriticalStrikeEffect.isReady(player)) {
+            // 未满 2.5 秒就攻击 → 重置蓄力
+            int timer = (int) PlayerDataAPI.get(player, CriticalStrikeEffect.DATA_TIMER);
+            if (timer > 0) {
+                CriticalStrikeEffect.reset(player);
+                CriticalStrikeProvider.reset(player);
+            }
+            return;
+        }
 
         float baseDamage = event.getOriginalDamage();
         event.setNewDamage(0);
-        executeCrit(player, target, baseDamage);
-    }
-
-    /** 会心一击触发：攻击实体 → 取消原攻击，转向锁定目标 */
-    private void onAttackEntity(AttackEntityEvent event) {
-        if (event.getEntity().level().isClientSide) return;
-        if (!CriticalStrikeEffect.isReady(event.getEntity())) return;
-
-        String targetUuid = CriticalStrikeEffect.getTargetUuid(event.getEntity());
-        if (targetUuid.isEmpty()) return;
-        Entity e = ((ServerLevel) event.getEntity().level()).getEntity(UUID.fromString(targetUuid));
-        if (!(e instanceof LivingEntity target) || !target.isAlive()) return;
-
-        event.setCanceled(true);
-        float baseDmg = (float) event.getEntity().getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-        executeCrit(event.getEntity(), target, baseDmg);
-    }
-
-    /** 会心一击触发：空砍 → 转向锁定目标 */
-    private void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
-        if (event.getEntity().level().isClientSide) return;
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (!CriticalStrikeEffect.isReady(player)) return;
 
         String targetUuid = CriticalStrikeEffect.getTargetUuid(player);
         if (targetUuid.isEmpty()) return;
-        Entity e = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
-        if (!(e instanceof LivingEntity target) || !target.isAlive()) return;
+        Entity lockedTarget = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
+        if (!(lockedTarget instanceof LivingEntity target) || !target.isAlive()) return;
 
-        float baseDmg = (float) player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-        executeCrit(player, target, baseDmg);
+        executeCrit(player, target, baseDamage);
     }
 
     private void executeCrit(Player player, LivingEntity target, float baseDamage) {
         var dir = target.position().subtract(player.position()).normalize();
         player.setDeltaMovement(dir.scale(1.5));
         player.hurtMarked = true;
-
-        // 视线转向目标
-        player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, target.getEyePosition());
 
         int level = CriticalStrikeEffect.getPlayerLevel(player);
         YizModQZKAPI.trueDamage(target, baseDamage * 2, player);

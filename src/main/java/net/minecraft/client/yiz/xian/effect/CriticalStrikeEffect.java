@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Set;
@@ -66,9 +67,14 @@ public class CriticalStrikeEffect extends AbstractEffect {
         PlayerDataAPI.set(player, DATA_TIMER, newTimer);
         PlayerDataAPI.set(player, DATA_TARGET, target.getUUID().toString());
         EntityLockAPI.lock(player, target, (float) newTimer / LOCK_TICKS, newTimer >= LOCK_TICKS);
-        // 充能完成音效
-        if (timer < LOCK_TICKS && newTimer >= LOCK_TICKS && player instanceof ServerPlayer sp) {
-            sp.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.0f);
+        // 充能完成：音效 + 攻击距离 +5
+        if (timer < LOCK_TICKS && newTimer >= LOCK_TICKS) {
+            if (player instanceof ServerPlayer sp)
+                sp.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.0f);
+            net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.setEntityAttribute(player,
+                net.minecraft.world.entity.ai.attributes.Attributes.ENTITY_INTERACTION_RANGE,
+                "crit_range", 15.0,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE);
         }
     }
 
@@ -105,23 +111,32 @@ public class CriticalStrikeEffect extends AbstractEffect {
         PlayerDataAPI.set(player, DATA_TIMER, 0);
         PlayerDataAPI.set(player, DATA_TARGET, "");
         EntityLockAPI.unlock(player);
+        var inst = player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ENTITY_INTERACTION_RANGE);
+        if (inst != null) inst.removeModifier(
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("yizmodqzk", "entity_crit_range"));
     }
 
-    /** 8格内最近存活且有视线的目标 */
+    /** 60°锥内最接近屏幕中心的实体（与客户端 CriticalStrikeProvider 一致） */
     public static LivingEntity findTarget(Player player) {
-        AABB box = player.getBoundingBox().inflate(RANGE);
-        LivingEntity nearest = null;
-        double closestDist = RANGE * RANGE;
-
-        for (var entity : player.level().getEntitiesOfClass(LivingEntity.class, box)) {
+        Vec3 eye = player.getEyePosition();
+        var look = player.getLookAngle();
+        double range = 32.0;
+        LivingEntity best = null;
+        double bestDot = 0.5, bestDist = Double.MAX_VALUE;
+        for (var entity : player.level().getEntitiesOfClass(LivingEntity.class,
+                player.getBoundingBox().inflate(range))) {
             if (entity == player || !entity.isAlive()) continue;
-            if (!player.hasLineOfSight(entity)) continue;
-            double dist = player.distanceToSqr(entity);
-            if (dist < closestDist) {
-                closestDist = dist;
-                nearest = entity;
+            Vec3 to = entity.position().subtract(eye);
+            double d2 = to.lengthSqr();
+            if (d2 > range * range) continue;
+            double dot = look.dot(to) / Math.sqrt(d2);
+            // 同方向优先选近的实体
+            if (best != null && Math.abs(dot - bestDot) < 0.05) {
+                if (d2 < bestDist) { bestDot = dot; best = entity; bestDist = d2; }
+            } else if (dot > bestDot) {
+                bestDot = dot; best = entity; bestDist = d2;
             }
         }
-        return nearest;
+        return best;
     }
 }

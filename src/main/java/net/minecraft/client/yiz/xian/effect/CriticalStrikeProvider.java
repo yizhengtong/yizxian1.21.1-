@@ -36,14 +36,18 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
         Vec3 eye = player.getEyePosition();
         var look = player.getLookAngle();
         Entity best = null;
-        double bestDot = CONE_DOT;
+        double bestDot = CONE_DOT, bestDist = Double.MAX_VALUE;
         for (var e : mc.level.getEntities(player, player.getBoundingBox().inflate(RANGE),
                 e -> e instanceof LivingEntity && e != player && e.isAlive())) {
             Vec3 to = e.position().subtract(eye);
             double d2 = to.lengthSqr();
             if (d2 > RANGE * RANGE) continue;
             double dot = look.dot(to) / Math.sqrt(d2);
-            if (dot > bestDot) { bestDot = dot; best = e; }
+            if (best != null && Math.abs(dot - bestDot) < 0.05) {
+                if (d2 < bestDist) { bestDot = dot; best = e; bestDist = d2; }
+            } else if (dot > bestDot) {
+                bestDot = dot; best = e; bestDist = d2;
+            }
         }
 
         LockState state = STATES.get(player.getUUID());
