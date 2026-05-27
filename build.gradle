@@ -58,6 +58,10 @@ neoForge {
 
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+
+            // Disable compressed klass pointers so VTableReplace can
+            // read full 64-bit klass addresses from object headers.
+            jvmArguments.add '-XX:-UseCompressedClassPointers'
         }
 
         server {
@@ -185,6 +189,20 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+// 将原生 DLL 复制到 runClient 的工作目录（run/），
+// 让 WindowCaptureManager 的 fallback 路径 user.dir/WindowCapture.dll 能命中。
+// 若 DLL 不存在，任务跳过（Copy 任务 from 不存在的文件不会报错，只是 NO-SOURCE）。
+var copyWindowCaptureDll = tasks.register('copyWindowCaptureDll', Copy) {
+    from('../yiz1.21.1/native/windowcapture') {
+        include 'WindowCapture.dll'
+    }
+    into file('run')
+}
+
+tasks.matching { it.name.startsWith('runClient') }.configureEach {
+    dependsOn copyWindowCaptureDll
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
