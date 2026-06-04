@@ -15,6 +15,7 @@ import net.minecraft.client.yiz.xian.effect.SharpBladeEffect;
 import net.minecraft.client.yiz.xian.item.GeneralItemItem;
 import net.minecraft.client.yiz.xian.item.SkillScrollItem;
 import net.minecraft.client.yiz.xian.item.TalentCoreItem;
+import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 import net.minecraft.client.yiz.xian.item.WeaponCoreItem;
 import net.minecraft.client.yiz.xian.realm.BreakthroughHandler;
 import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
@@ -26,8 +27,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -57,12 +60,17 @@ public class YizxianMod {
         ITEMS.register("general_item", GeneralItemItem::new);
     public static final Supplier<Item> WEAPON_CORE =
         ITEMS.register("weapon_core", WeaponCoreItem::new);
+    public static final Supplier<Item> TERRAPRISMA_SCROLL =
+        ITEMS.register("terraprisma_scroll", TerraprismaScrollItem::new);
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
 
         // ---- 物品注册 ----
         ITEMS.register(modEventBus);
+
+        // ---- 创造模式物品栏 ----
+        modEventBus.addListener(this::onBuildCreativeTab);
 
         // ---- 效果注册（构造函数自动注册到 ModRegistries） ----
         new SharpBladeEffect(5);
@@ -92,6 +100,13 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
+    }
+
+    /** 将本模组物品放入创造模式物品栏 */
+    private void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
+            event.accept(TERRAPRISMA_SCROLL.get());
+        }
     }
 
     /** 会心一击：攻击命中 → 未满充重置 / 满充突进+伤害 */

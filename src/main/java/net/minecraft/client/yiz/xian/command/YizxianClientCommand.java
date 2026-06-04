@@ -4,9 +4,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.yiz.client.render.HandheldPanelRenderer;
 import net.minecraft.client.yiz.client.render.HandheldPanelRenderer.PanelInfo;
 import net.minecraft.client.yiz.windowmapper.WindowCaptureManager;
+import net.minecraft.client.yiz.xian.render.TerraprismaConfigScreen;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -44,6 +46,10 @@ public final class YizxianClientCommand {
                         .executes(YizxianClientCommand::status))
                     .then(Commands.literal("fix")
                         .executes(YizxianClientCommand::toggleFix))
+                )
+                .then(Commands.literal("terra")
+                    .then(Commands.literal("gui")
+                        .executes(YizxianClientCommand::openTerraGui))
                 )
         );
     }
@@ -125,6 +131,13 @@ public final class YizxianClientCommand {
                 "  #" + info.id + " [" + info.mode + "] " + info.width + "x" + info.height
                 + " — " + info.title), false);
         }
+        return 1;
+    }
+
+    /** /yizxian terra gui — 打开泰拉棱镜实时调参界面 */
+    private static int openTerraGui(CommandContext<CommandSourceStack> ctx) {
+        Minecraft.getInstance().execute(() ->
+            Minecraft.getInstance().setScreen(new TerraprismaConfigScreen()));
         return 1;
     }
 
