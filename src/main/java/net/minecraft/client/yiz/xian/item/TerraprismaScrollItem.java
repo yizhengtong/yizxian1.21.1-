@@ -3,45 +3,99 @@ package net.minecraft.client.yiz.xian.item;
 import net.minecraft.client.yiz.api.IWeaponItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 public class TerraprismaScrollItem extends Item implements IWeaponItem {
 
     private static final String COUNT_KEY = "yizxianmod:sword_count";
-    private static final int MAX_SWORDS = 24;
+    private final int level;
+    private final TerraprismaLevel spec;
 
-    public TerraprismaScrollItem() {
-        super(new Item.Properties().stacksTo(1));
+    // ═══ 五级预设 ═══
+    public record TerraprismaLevel(
+        int maxSwords, double hurtDmg,
+        DamageKind kind,
+        double trueDmg, double modHp, double modHpPctOfMax,
+        int antiHealSec, int antiHealCapSec
+    ) {}
+
+    public enum DamageKind {
+        /** ①fake + ②原版 playerAttack */  PHYSICAL,
+        /** ①fake + ②原版 indirectMagic */ MAGIC,
+        /** ①fake + ③trueDamage */         TRUE_DAMAGE,
+        /** ①fake + ③trueDamage + ④modifyHealth */ HYBRID
     }
+
+    private static final TerraprismaLevel[] TABLE = {
+        // idx=1 平凡
+        new TerraprismaLevel(2, 3, DamageKind.PHYSICAL,   0,0,0,     0,  0),
+        // idx=2 优秀
+        new TerraprismaLevel(4, 3, DamageKind.PHYSICAL,   0,0,0,     0,  0),
+        // idx=3 精良
+        new TerraprismaLevel(5, 4, DamageKind.MAGIC,      0,0,0,     0,  0),
+        // idx=4 史诗
+        new TerraprismaLevel(7, 0, DamageKind.TRUE_DAMAGE,5,0,0,     5, 15),
+        // idx=5 传说
+        new TerraprismaLevel(9, 0, DamageKind.HYBRID,     2,3,0.0001,5, 45),
+    };
+
+    public static TerraprismaLevel specOf(int level) { return TABLE[level - 1]; }
+
+    // ═══ 构造 ═══
+
+    public TerraprismaScrollItem(int level) {
+        super(new Item.Properties().stacksTo(1));
+        this.level = level;
+        this.spec = specOf(level);
+    }
+
+    public int getLevel()           { return level; }
+    public TerraprismaLevel getSpec() { return spec; }
+
+    public static int maxSwordsOf(int level) { return specOf(level).maxSwords; }
+    public static int maxSwordsOf(ItemStack stack) {
+        if (stack.getItem() instanceof TerraprismaScrollItem tsi) return tsi.spec.maxSwords;
+        return 0;
+    }
+
+    // ═══ use() — 右键+1 / Shift右键-1 ═══
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (level.isClientSide) return InteractionResultHolder.success(held);
-
         boolean shift = player.isShiftKeyDown();
         int count = getSwordCount(held);
+        int max = this.spec.maxSwords;
 
-        if (shift) {
-            if (count > 0) {
-                setSwordCount(held, count - 1);
-            }
-        } else {
-            if (count < MAX_SWORDS) {
-                setSwordCount(held, count + 1);
+        if (!level.isClientSide) {
+            if (shift) {
+                if (count > 0) setSwordCount(held, count - 1);
+            } else {
+                if (count < max) setSwordCount(held, count + 1);
             }
         }
-
         return InteractionResultHolder.success(held);
     }
 
-    // ── 静态工具方法：客户端渲染也用 ──
+    // ═══ tooltip: 唤剑数/最大数 ═══
+
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
+        int count = getSwordCount(stack);
+        tooltip.add(Component.literal("§7唤剑: §f" + count + "§7/§f" + spec.maxSwords));
+    }
+
+    // ═══ NBT 读写 ═══
 
     public static int getSwordCount(ItemStack stack) {
         CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
@@ -52,15 +106,7 @@ public class TerraprismaScrollItem extends Item implements IWeaponItem {
     public static void setSwordCount(ItemStack stack, int count) {
         CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
         CompoundTag tag = cd != null ? cd.copyTag() : new CompoundTag();
-        if (count <= 0) {
-            tag.remove(COUNT_KEY);
-        } else {
-            tag.putInt(COUNT_KEY, count);
-        }
+        tag.putInt(COUNT_KEY, Math.max(0, count));
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-    }
-
-    public static int getMaxSwords() {
-        return MAX_SWORDS;
     }
 }

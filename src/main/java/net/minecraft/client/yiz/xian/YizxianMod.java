@@ -1,10 +1,12 @@
 package net.minecraft.client.yiz.xian;
 
 import com.mojang.serialization.Codec;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 import net.minecraft.client.yiz.api.PlayerDataAPI;
+import net.minecraft.client.yiz.util.StagedItemHelper;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.core.registry.ModRegistries;
@@ -60,8 +62,10 @@ public class YizxianMod {
         ITEMS.register("general_item", GeneralItemItem::new);
     public static final Supplier<Item> WEAPON_CORE =
         ITEMS.register("weapon_core", WeaponCoreItem::new);
-    public static final Supplier<Item> TERRAPRISMA_SCROLL =
-        ITEMS.register("terraprisma_scroll", TerraprismaScrollItem::new);
+    // 泰拉棱镜卷轴 — 5 等级（规则A）
+    public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
+        StagedItemHelper.registerStaged(ITEMS, "terraprisma_scroll", 5,
+            level -> new TerraprismaScrollItem(level));
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
@@ -105,7 +109,7 @@ public class YizxianMod {
     /** 将本模组物品放入创造模式物品栏 */
     private void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(TERRAPRISMA_SCROLL.get());
+            for (var s : TERRAPRISMA_SCROLLS) event.accept(s.get());
         }
     }
 

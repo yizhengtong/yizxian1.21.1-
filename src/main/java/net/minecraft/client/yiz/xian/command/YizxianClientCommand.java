@@ -51,6 +51,10 @@ public final class YizxianClientCommand {
                     .then(Commands.literal("gui")
                         .executes(YizxianClientCommand::openTerraGui))
                 )
+                .then(Commands.literal("outline")
+                    .then(Commands.argument("preset", IntegerArgumentType.integer(0, 5))
+                        .executes(YizxianClientCommand::setOutline))
+                )
         );
     }
 
@@ -138,6 +142,16 @@ public final class YizxianClientCommand {
     private static int openTerraGui(CommandContext<CommandSourceStack> ctx) {
         Minecraft.getInstance().execute(() ->
             Minecraft.getInstance().setScreen(new TerraprismaConfigScreen()));
+        return 1;
+    }
+
+    /** /yizxian outline <0-5> — 设置所有物品描边壳颜色 */
+    private static int setOutline(CommandContext<CommandSourceStack> ctx) {
+        int p = IntegerArgumentType.getInteger(ctx, "preset");
+        String[] names = {"白", "彩虹", "红", "紫", "蓝", "绿"};
+        System.setProperty("yizxian.outline.preset", String.valueOf(p));
+        ctx.getSource().sendSuccess(
+            () -> Component.literal("描边壳 → " + p + "（" + names[p] + "）"), false);
         return 1;
     }
 

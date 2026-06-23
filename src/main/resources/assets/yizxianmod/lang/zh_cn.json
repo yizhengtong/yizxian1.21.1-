@@ -3,5 +3,9 @@
   "item.yizxianmod.skill_scroll": "技能卷轴",
   "item.yizxianmod.general_item": "神秘物品",
   "item.yizxianmod.weapon_core": "武器核心",
-  "item.yizxianmod.terraprisma_scroll": "泰拉棱镜卷轴"
+  "item.yizxianmod.terraprisma_scroll_1": "平凡 泰拉棱镜",
+  "item.yizxianmod.terraprisma_scroll_2": "优秀 泰拉棱镜",
+  "item.yizxianmod.terraprisma_scroll_3": "精良 泰拉棱镜",
+  "item.yizxianmod.terraprisma_scroll_4": "史诗 泰拉棱镜",
+  "item.yizxianmod.terraprisma_scroll_5": "传说 泰拉棱镜"
 }

@@ -6,15 +6,20 @@ import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 import java.io.*;
@@ -27,7 +32,9 @@ public final class TerraprismaRenderHandler {
 
     private static final Map<UUID, BladeState[]> BLADES = new HashMap<>();
     private static final Map<UUID, Long> NEXT_DISPATCH_TICK = new HashMap<>();
-
+    private static final Map<UUID, UUID> PLAYER_CMD_TARGET = new HashMap<>();
+    private static final Map<UUID, Long> CMD_TARGET_EXPIRE = new HashMap<>();
+    private static final Set<UUID> DEAD_PLAYERS = new HashSet<>();
     // ── 翅膀姿态参数（当前最爱配置）──
     static double behindBase   = 0.5;
     static double behindStep   = 0.05;
@@ -51,6 +58,9 @@ public final class TerraprismaRenderHandler {
     static double tiltAngle    = -90.0;
     static double targetRange  = 37.0;
     static int    glowLight    = 15728880;
+    /** 伤害层开关 — /yizxian bypass 3 或 /yizxian bypass 4 独立切换 */
+    public static boolean useTrueDamage   = true;  // ③ YizModQZKAPI.trueDamage
+    public static boolean useModifyHealth = true;  // ④ EntityASMUtil.modifyHealth
 
     // ── 攻击参数 ──
     static int    firstStrikeDuration  = 7;
@@ -157,7 +167,11 @@ public final class TerraprismaRenderHandler {
         Vec3 retreatStart;
         Vec3 retreatCtrl;
         Vec3 retreatHome;
-        long lastHitTick;
+        Map<UUID, Long> hitCooldowns = new HashMap<>();
+        /** 调试标签: A=翅膀, B=上升, C=俯冲, D=椭圆, E=穿刺, F=归巢, G=追击 */
+        String phaseLabel = "A";
+        /** 召唤来源等级 (1/2/3)，决定伤害系数 */
+        int sourceLevel = 1;
 
         BladeState(int index) { this.index = index; }
 
@@ -167,11 +181,13 @@ public final class TerraprismaRenderHandler {
             launchPhase = 0; memoPos = Vec3.ZERO; flightPlan = null;
             curNode = new FlightPoint(from, 0, 0, 0);
             retreatStart = null; retreatCtrl = null; retreatHome = null;
+            phaseLabel = "B";
         }
         void swapTarget(UUID newTarget) {
             mode = BladeMode.RISING; timeInMode = 0; targetId = newTarget;
             roundCount = 0; launchPhase = 1; memoPos = Vec3.ZERO; flightPlan = null;
             retreatStart = null; retreatCtrl = null; retreatHome = null;
+            phaseLabel = "B";
         }
         void executePlan(FlightPlan plan) {
             mode = BladeMode.ASSAULT; timeInMode = 0; flightPlan = plan;
@@ -181,6 +197,7 @@ public final class TerraprismaRenderHandler {
             mode = BladeMode.RETURNING; timeInMode = 0; targetId = null;
             roundCount = 0; launchPhase = 0; flightPlan = null;
             retreatStart = worldPos;
+            phaseLabel = "F";
         }
         // 轨迹姿态提取
         float getYaw()   { return curNode.yaw; }
@@ -234,19 +251,24 @@ public final class TerraprismaRenderHandler {
 
     private static void planFirstStrike(BladeState blade, LivingEntity target) {
         Vec3 start = blade.worldPos;
-        Vec3 end = target.getBoundingBox().getCenter();
-        Vec3 dir = end.subtract(start);
-        if (dir.lengthSqr() < 1e-4) dir = new Vec3(0, 0, 1);
-        end = end.add(dir.normalize().scale(2.5));
-        Vec3 planeN = dir.cross(new Vec3(0, 1, 0)).normalize();
+        // 目标身体中心 → 穿过目标到达后方
+        Vec3 bodyCenter = target.getBoundingBox().getCenter();
+        Vec3 approachDir = bodyCenter.subtract(start);
+        if (approachDir.lengthSqr() < 1e-4) approachDir = new Vec3(0, 0, 1);
+        approachDir = approachDir.normalize();
+        // 穿过身体后继续延伸 3 格
+        Vec3 through = bodyCenter.add(approachDir.scale(3.0));
+        Vec3 planeN = approachDir.cross(new Vec3(0, 1, 0)).normalize();
         if (planeN.lengthSqr() < 1e-4) planeN = new Vec3(1, 0, 0);
         List<FlightPoint> steps = new ArrayList<>();
-        int dur = firstStrikeDuration;
+        double dist = start.distanceTo(through);
+        int dur = Math.max(firstStrikeDuration, (int)(dist / 1.5));
         for (int i = 1; i <= dur; i++) {
             float t = (float) i / dur;
             t = t * t;
-            steps.add(resolveRotation(start.lerp(end, t), dir, planeN));
+            steps.add(resolveRotation(start.lerp(through, t), approachDir, planeN));
         }
+        blade.phaseLabel = "C";
         blade.executePlan(new FlightPlan(steps));
     }
 
@@ -278,6 +300,7 @@ public final class TerraprismaRenderHandler {
                 steps.add(resolveRotation(ep, td, planeN));
             }
         }
+        blade.phaseLabel = "D";
         blade.executePlan(new FlightPlan(steps));
     }
 
@@ -310,6 +333,7 @@ public final class TerraprismaRenderHandler {
             Vec3 pt = prepPos.lerp(endPos, d);
             steps.add(resolveRotation(pt, atkDir, curUp));
         }
+        blade.phaseLabel = "E";
         blade.executePlan(new FlightPlan(steps));
     }
 
@@ -325,11 +349,17 @@ public final class TerraprismaRenderHandler {
             Vec3 td = ep.subtract(el.center()).normalize();
             steps.add(resolveRotation(ep, td, curUp));
         }
+        blade.phaseLabel = "G";
         blade.executePlan(new FlightPlan(steps));
     }
 
     private static void applyPosCorrection(BladeState blade, LivingEntity target) {
         Vec3 curCenter = target.getBoundingBox().getCenter();
+        // 首次调用 memoPos=ZERO → 只记录位置，不偏移（否则整条轨迹被 shift 到万里之外）
+        if (blade.memoPos.lengthSqr() < 1e-5) {
+            blade.memoPos = curCenter;
+            return;
+        }
         Vec3 offset = curCenter.subtract(blade.memoPos);
         if (offset.lengthSqr() > 1e-5 && blade.flightPlan != null) {
             List<FlightPoint> nodes = blade.flightPlan.steps;
@@ -419,6 +449,8 @@ public final class TerraprismaRenderHandler {
         reloadConfig();
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
+        // 检测玩家主动攻击目标
+        updateCommandTarget(mc);
         var players = mc.level.players();
         if (players.isEmpty()) return;
 
@@ -436,32 +468,87 @@ public final class TerraprismaRenderHandler {
         NEXT_DISPATCH_TICK.keySet().retainAll(alive);
 
         for (Player player : players) {
-            ItemStack scroll = findScroll(player);
-            if (scroll.isEmpty()) { BLADES.remove(player.getUUID()); continue; }
-            int count = net.minecraft.client.yiz.xian.item.TerraprismaScrollItem.getSwordCount(scroll);
-            if (count <= 0) { BLADES.remove(player.getUUID()); continue; }
+            // 玩家死亡复活 → 重置所有剑状态和目标
+            UUID puid = player.getUUID();
+            if (!player.isAlive()) { DEAD_PLAYERS.add(puid); continue; }
+            if (DEAD_PLAYERS.remove(puid)) {
+                BLADES.remove(puid);
+                NEXT_DISPATCH_TICK.remove(puid);
+                PLAYER_CMD_TARGET.remove(puid);
+                CMD_TARGET_EXPIRE.clear();
+            }
+            // 扫描全部泰拉棱镜卷轴 → 总剑数 = 所有卷轴 NBT sword_count 之和
+            List<ItemStack> scrolls = findAllScrolls(player);
+            if (scrolls.isEmpty()) { BLADES.remove(puid); continue; }
+            int count = 0;
+            int maxLevel = 0;
+            List<Integer> sourcePool = new ArrayList<>();
+            for (ItemStack s : scrolls) {
+                if (s.getItem() instanceof net.minecraft.client.yiz.xian.item.TerraprismaScrollItem tsi) {
+                    int lv = tsi.getLevel();
+                    maxLevel = Math.max(maxLevel, lv);
+                    int n = net.minecraft.client.yiz.xian.item.TerraprismaScrollItem.getSwordCount(s);
+                    for (int j = 0; j < n; j++) sourcePool.add(lv);
+                    count += n;
+                }
+            }
+            if (count <= 0) { BLADES.remove(puid); continue; }
+            final int bladeCount = count;
 
             double px = Mth.lerp(partial, player.xo, player.getX());
             double py = Mth.lerp(partial, player.yo, player.getY());
             double pz = Mth.lerp(partial, player.zo, player.getZ());
             float yrDeg = Mth.rotLerp(partial, player.yBodyRotO, player.yBodyRot);
 
-            BladeState[] blades = BLADES.computeIfAbsent(player.getUUID(), k -> new BladeState[count]);
-            if (blades.length != count) {
-                BladeState[] r = Arrays.copyOf(blades, count);
-                blades = r; BLADES.put(player.getUUID(), blades);
+            BladeState[] blades = BLADES.computeIfAbsent(puid, k -> new BladeState[bladeCount]);
+            if (blades.length != bladeCount) {
+                // 缩容时：优先移除 sourceLevel 与 sourcePool 计数不符的 IDLE 剑
+                BladeState[] nw = new BladeState[bladeCount];
+                int wi = 0;
+                boolean[] keep = new boolean[blades.length];
+                // 统计当前各等级存活数
+                int[] curLvCount = new int[6]; // 1..5
+                for (BladeState b : blades) if (b != null) curLvCount[b.sourceLevel]++;
+                int[] tgtLvCount = new int[6];
+                for (int lv : sourcePool) tgtLvCount[lv]++;
+                // 优先保留与 sourcePool 匹配的，多余 IDLE 的丢弃
+                int[] kept = new int[6];
+                for (int i = 0; i < blades.length && wi < bladeCount; i++) {
+                    BladeState b = blades[i];
+                    if (b == null) continue;
+                    if (kept[b.sourceLevel] < tgtLvCount[b.sourceLevel] || b.mode != BladeMode.IDLE_WING) {
+                        keep[i] = true;
+                        kept[b.sourceLevel]++;
+                        wi++;
+                    }
+                }
+                // 还不够 → 从被丢弃的中补
+                for (int i = 0; i < blades.length && wi < bladeCount; i++) {
+                    if (!keep[i] && blades[i] != null) { keep[i] = true; wi++; }
+                }
+                wi = 0;
+                for (int i = 0; i < blades.length; i++) {
+                    if (keep[i] && blades[i] != null) nw[wi++] = blades[i];
+                }
+                blades = nw; BLADES.put(puid, blades);
             }
-            for (int i = 0; i < count; i++)
-                if (blades[i] == null) blades[i] = new BladeState(i);
+            for (int i = 0; i < bladeCount; i++) {
+                if (blades[i] == null) {
+                    blades[i] = new BladeState(i);
+                    // 新 blade 从 sourcePool 取来源等级（分配后剔除）
+                    if (!sourcePool.isEmpty()) blades[i].sourceLevel = sourcePool.remove(0);
+                }
+            }
 
-            runScheduler(player, blades, gameTime, px, py, pz, yrDeg);
+            runScheduler(player, blades, gameTime, px, py, pz, yrDeg, sourcePool);
 
-            for (int i = 0; i < count; i++) {
+            ItemStack renderScroll = scrolls.get(0); // 同纹理，取第一个用于渲染
+            for (int i = 0; i < bladeCount; i++) {
                 BladeState b = blades[i];
                 if (b.mode == BladeMode.IDLE_WING) {
-                    renderIdleWing(stack, buffer, ri, scroll, player, px, py, pz, yrDeg, i, gameTime + partial, cx, cy, cz);
+                    renderIdleWing(stack, buffer, ri, renderScroll, player, px, py, pz, yrDeg, i, gameTime + partial, cx, cy, cz, b.sourceLevel);
                 } else {
-                    renderFlightBlade(stack, buffer, ri, scroll, player, b, partial, cx, cy, cz);
+                    renderFlightBlade(stack, buffer, ri, renderScroll, player, b, partial, cx, cy, cz);
                 }
             }
         }
@@ -471,61 +558,117 @@ public final class TerraprismaRenderHandler {
     // 调度器
     // ═══════════════════════════════════════════════════════════
 
-    private static void runScheduler(Player player, BladeState[] blades, long gameTime,
-                                      double px, double py, double pz, float yrDeg) {
+    private static void runScheduler(Player player, BladeState[] blades,
+                                      long gameTime, double px, double py, double pz, float yrDeg,
+                                      List<Integer> sourcePool) {
         List<LivingEntity> hostiles = scanHostiles(player);
-        List<LivingEntity> atkList = hostiles.size() > 3 ? hostiles.subList(0, 3) : hostiles;
-        int t = blades.length;
-        int[] quota = switch (atkList.size()) {
-            case 0 -> new int[0];
-            case 1 -> new int[]{t};
-            case 2 -> new int[]{t/2, t - t/2};
-            default -> { int a = t * 3/8, b = t * 3/8; yield new int[]{a, b, t - a - b}; }
-        };
-        UUID[] ids = atkList.stream().map(LivingEntity::getUUID).toArray(UUID[]::new);
-        int[] assigned = new int[ids.length];
-        for (BladeState b : blades) {
-            if (b.mode == BladeMode.IDLE_WING || b.mode == BladeMode.RETURNING) continue;
-            int idx = indexOf(ids, b.targetId);
-            if (idx >= 0) assigned[idx]++;
-        }
+        UUID cmdId = PLAYER_CMD_TARGET.get(player.getUUID());
+        LivingEntity cmdTgt = cmdId != null ? findTarget(player, cmdId) : null;
+        if (cmdTgt != null && !cmdTgt.isAlive()) cmdTgt = null;
 
-        for (BladeState b : blades) {
-            if (b.mode == BladeMode.IDLE_WING || b.mode == BladeMode.RETURNING) continue;
-            LivingEntity tgt = findTarget(player, b.targetId);
-            if (tgt == null || !tgt.isAlive()) {
-                int need = pickNeed(quota, assigned);
-                if (need >= 0) { b.swapTarget(ids[need]); assigned[need]++; }
-                else b.returnHome();
-                continue;
-            }
-            int idx = indexOf(ids, b.targetId);
-            if (idx < 0) {
-                int need = pickNeed(quota, assigned);
-                if (need >= 0) { b.swapTarget(ids[need]); assigned[need]++; }
-                else b.returnHome();
-                continue;
-            }
-            if (assigned[idx] > quota[idx]) {
-                int need = pickNeed(quota, assigned);
-                if (need >= 0 && need != idx) { b.swapTarget(ids[need]); assigned[idx]--; assigned[need]++; }
-            }
-        }
+        // 构建目标列表：指令目标 + 所有敌对生物
+        List<UUID> targetIds = new ArrayList<>();
+        List<Integer> quotas = new ArrayList<>();
+        int total = blades.length;
 
-        long last = NEXT_DISPATCH_TICK.getOrDefault(player.getUUID(), -999L);
-        if (!atkList.isEmpty() && gameTime - last >= dispatchInterval) {
-            int need = pickNeed(quota, assigned);
-            if (need >= 0) {
-                for (BladeState b : blades) {
-                    if (b.mode == BladeMode.IDLE_WING) {
-                        Vec3 wp = wingWorldPos(player, px, py, pz, yrDeg, b.index, 1f);
-                        b.enterRising(ids[need], wp);
-                        assigned[need]++;
-                        NEXT_DISPATCH_TICK.put(player.getUUID(), gameTime);
-                        break;
+        if (hostiles.isEmpty() && cmdTgt == null) {
+            for (BladeState b : blades) {
+                if (b.mode != BladeMode.IDLE_WING && b.mode != BladeMode.RETURNING) b.returnHome();
+            }
+        } else {
+            // 收集全部敌对目标（去重），按 HP 降序
+            Set<UUID> seen = new HashSet<>();
+            List<LivingEntity> allTargets = new ArrayList<>();
+            if (cmdTgt != null && cmdTgt.isAlive()) { allTargets.add(cmdTgt); seen.add(cmdTgt.getUUID()); }
+            for (LivingEntity h : hostiles) {
+                if (seen.add(h.getUUID())) allTargets.add(h);
+            }
+            // 按 HP 降序排列（指令目标已在最前）
+            if (allTargets.size() > 1 && cmdTgt != null) {
+                LivingEntity first = allTargets.remove(0);
+                allTargets.sort((a, b) -> Float.compare(b.getMaxHealth(), a.getMaxHealth()));
+                allTargets.add(0, first);
+            }
+            int N = allTargets.size();
+            if (N == 1) {
+                targetIds.add(allTargets.get(0).getUUID());
+                quotas.add(total);
+            } else {
+                int cmdQuota = 0, defQuota = 0, spreadQuota;
+                if (cmdTgt != null && total > 5) {
+                    cmdQuota = total * 30 / 100;  // 30% 指令目标
+                }
+                if (total > 5) {
+                    defQuota = total * 20 / 100;   // 20% 近身防御
+                }
+                spreadQuota = total - cmdQuota - defQuota;
+                // 分配指令目标
+                if (cmdQuota > 0) {
+                    targetIds.add(cmdTgt.getUUID());
+                    quotas.add(cmdQuota);
+                }
+                // 防御：最近 3 只
+                int defCount = Math.min(3, hostiles.size());
+                int perDef = defCount > 0 ? defQuota / defCount : 0;
+                for (int i = 0; i < defCount && i < hostiles.size(); i++) {
+                    UUID id = hostiles.get(i).getUUID();
+                    if (targetIds.contains(id)) continue;
+                    targetIds.add(id);
+                    quotas.add(i == defCount - 1 ? defQuota - perDef * (defCount - 1) : perDef);
+                }
+                if (defCount == 0 && defQuota > 0) { defQuota = 0; spreadQuota = total - cmdQuota; }
+                // 均匀分配剩余
+                int spreadCount = 0;
+                for (LivingEntity h : allTargets) {
+                    if (!targetIds.contains(h.getUUID())) spreadCount++;
+                }
+                if (spreadCount > 0) {
+                    int perSpread = spreadQuota / spreadCount;
+                    int acc = 0;
+                    int cnt = 0;
+                    for (LivingEntity h : allTargets) {
+                        if (targetIds.contains(h.getUUID())) continue;
+                        targetIds.add(h.getUUID());
+                        cnt++;
+                        int q = (cnt == spreadCount) ? spreadQuota - acc : Math.max(1, perSpread);
+                        quotas.add(q);
+                        acc += q;
                     }
                 }
             }
+            UUID[] ids = targetIds.toArray(UUID[]::new);
+            int[] quota = quotas.stream().mapToInt(i -> i).toArray();
+            int[] assigned = new int[ids.length];
+            for (BladeState b : blades) {
+                if (b.mode == BladeMode.IDLE_WING || b.mode == BladeMode.RETURNING) continue;
+                int idx = indexOf(ids, b.targetId);
+                if (idx >= 0) assigned[idx]++;
+            }
+            for (BladeState b : blades) {
+                if (b.mode == BladeMode.IDLE_WING || b.mode == BladeMode.RETURNING) continue;
+                LivingEntity tgt = findTarget(player, b.targetId);
+                if (tgt == null || !tgt.isAlive()) {
+                    int need = pickNeed(quota, assigned);
+                    if (need >= 0) { b.targetId = ids[need]; assigned[need]++; }
+                    else b.returnHome();
+                }
+            }
+            // 批量出剑
+            long last = NEXT_DISPATCH_TICK.getOrDefault(player.getUUID(), -999L);
+            int dispatched = 0;
+            for (int i = 0; i < ids.length && dispatched < total / 10 + 6; i++) {
+                int need = pickNeed(quota, assigned);
+                if (need < 0) break;
+                for (BladeState b : blades) {
+                    if (b.mode == BladeMode.IDLE_WING) {
+                        b.enterRising(ids[need], wingWorldPos(player, px, py, pz, yrDeg, b.index, 1f));
+                        // sourceLevel 在建剑时已分配，此处不覆写
+                        assigned[need]++; dispatched++;
+                        if (dispatched >= total / 10 + 6) break;
+                    }
+                }
+            }
+            if (dispatched > 0) NEXT_DISPATCH_TICK.put(player.getUUID(), gameTime);
         }
 
         float dt = Minecraft.getInstance().getTimer().getRealtimeDeltaTicks();
@@ -553,37 +696,35 @@ public final class TerraprismaRenderHandler {
                 Vec3 apex = new Vec3(px + pseudoRand(b.index,0)*0.5,
                     py + player.getEyeHeight() + 2.5, pz + pseudoRand(b.index,1)*0.5);
                 if (b.flightPlan == null) {
-                    Vec3 tp = tgt.getBoundingBox().getCenter();
-                    // 贝塞尔弧线飞向 apex：控制点偏目标方向，造出"先转向再爬升"的弧线
-                    double sideOff = pseudoRand(b.index, 5) * 1.8;   // 左右散布
-                    double fwdOff  = pseudoRand(b.index, 6) * 1.2;   // 前后散布
+                    // 贝塞尔弧线飞向头顶 apex
+                    double sideOff = pseudoRand(b.index, 5) * 1.8;
+                    double fwdOff  = pseudoRand(b.index, 6) * 1.2;
                     float bodyRad = (float) Math.toRadians(yrDeg);
-                    Vec3 ctrl = new Vec3(px + sideOff * Math.cos(bodyRad) + fwdOff * Math.sin(bodyRad),
-                        py + player.getEyeHeight() + 1.0 + pseudoRand(b.index,7) * 2.0,
-                        pz - sideOff * Math.sin(bodyRad) + fwdOff * Math.cos(bodyRad));
-                    Vec3 tipDir = tp.subtract(apex).normalize();
+                    Vec3 ctrl = new Vec3(px + sideOff*Math.cos(bodyRad)+fwdOff*Math.sin(bodyRad),
+                        py + player.getEyeHeight()+1.0 + pseudoRand(b.index,7)*2.0,
+                        pz - sideOff*Math.sin(bodyRad)+fwdOff*Math.cos(bodyRad));
+                    Vec3 tipDir = tgt.getEyePosition(1f).subtract(apex).normalize();
                     Vec3 pn = tipDir.cross(new Vec3(0,1,0)).normalize();
                     if (pn.lengthSqr() < 1e-4) pn = new Vec3(1,0,0);
                     List<FlightPoint> st = new ArrayList<>();
-                    int dur = 12 + b.index % 4;  // 12~15 tick，每把剑稍不同
+                    double riseDist = apex.distanceTo(b.worldPos);
+                    int dur = Math.max(6 + b.index % 2, (int)(riseDist / 2.0));
                     for (int j = 1; j <= dur; j++) {
-                        float t = (float) j / dur;
-                        t = t * t * (3f - 2f * t);
-                        Vec3 p = bezier3(t, b.worldPos, ctrl, apex);
-                        st.add(resolveRotation(p, tipDir, pn));
+                        float t = (float) j / dur; t = t*t*(3f-2f*t);
+                        st.add(resolveRotation(bezier3(t, b.worldPos, ctrl, apex), tipDir, pn));
                     }
                     b.flightPlan = new FlightPlan(st); b.timeInMode = 0;
                 }
-                // 平滑分数阶插值（消除闪烁）
                 int N = b.flightPlan.steps.size();
                 float pr = Math.min(1f, b.timeInMode / N);
                 if (pr >= 1f) {
-                    planFirstStrike(b, tgt); applyPosCorrection(b, tgt);
+                    // 抵达 apex → 从头顶飞向目标眼高，不穿地
+                    planFirstStrike(b, tgt);
+                    applyPosCorrection(b, tgt);
                     return;
                 }
                 double raw = pr * (N - 1);
-                int lo = Math.min((int) raw, N - 1);
-                int hi = Math.min(lo + 1, N - 1);
+                int lo = Math.min((int) raw, N - 1), hi = Math.min(lo + 1, N - 1);
                 b.interpT = (float)(raw - lo);
                 b.interpFrom = b.flightPlan.steps.get(lo);
                 b.interpTo   = b.flightPlan.steps.get(hi);
@@ -592,12 +733,21 @@ public final class TerraprismaRenderHandler {
 
             case ASSAULT -> {
                 if (b.flightPlan == null) { b.returnHome(); return; }
+                // 每帧检查目标存活 → 已死则立即 DIVE 飞向下一个敌人
+                LivingEntity tgt = findTarget(player, b.targetId);
+                if (tgt == null || !tgt.isAlive()) {
+                    List<LivingEntity> hs = scanHostiles(player);
+                    if (!hs.isEmpty()) {
+                        b.targetId = hs.get(0).getUUID();
+                        planFirstStrike(b, hs.get(0));
+                        applyPosCorrection(b, hs.get(0));
+                    } else b.returnHome();
+                    return;
+                }
                 int totalTicks = b.flightPlan.steps.size();
                 float progress = Math.min(1f, b.timeInMode / totalTicks);
                 if (progress >= 1f) {
                     b.roundCount++;
-                    LivingEntity tgt = findTarget(player, b.targetId);
-                    if (tgt == null || !tgt.isAlive()) { b.returnHome(); return; }
                     if (player.getRandom().nextDouble() < 0.5) planEllipseSlash(b, player);
                     else planPierceSlash(b, tgt);
                     applyPosCorrection(b, tgt);
@@ -617,23 +767,30 @@ public final class TerraprismaRenderHandler {
                     b.velocity = b.interpFrom.pos.subtract(b.flightPlan.steps.get(lof - 1).pos);
                     if (b.velocity.lengthSqr() > 1e-4) b.velocity = b.velocity.normalize();
                 }
-                // 伤害判定：剑在目标附近时造成 9 点伤害
-                LivingEntity atk = findTarget(player, b.targetId);
-                if (atk != null && atk.isAlive()) tryDealDamage(b, atk);
+                // 碰撞伤害：剑路径上所有怪物均受伤
+                tryDealDamage(b);
             }
 
             case RETURNING -> {
+                // 归巢中途出现新敌人 → 直接切过去攻击
+                List<LivingEntity> hs = scanHostiles(player);
+                if (!hs.isEmpty() && b.targetId == null) {
+                    b.enterRising(hs.get(0).getUUID(), b.worldPos);
+                    return;
+                }
                 // DIVE 攻击玩家 → 穿过 → 立刻归翼
                 Vec3 playerBody = new Vec3(px, py + player.getBbHeight() * 0.5, pz);
                 Vec3 wingHome = wingWorldPos(player, px, py, pz, yrDeg, b.index, 1f);
                 if (b.flightPlan == null) {
                     Vec3 dir = playerBody.subtract(b.worldPos).normalize();
-                    Vec3 through = playerBody.add(dir.scale(1.5));
+                    Vec3 through = playerBody.add(dir.scale(0.5));
                     Vec3 pn = dir.cross(new Vec3(0,1,0)).normalize();
                     if (pn.lengthSqr() < 1e-4) pn = new Vec3(1,0,0);
+                    double dist = b.worldPos.distanceTo(playerBody);
+                    int durt = Math.max(7, (int)(dist / 1.5));
                     List<FlightPoint> st = new ArrayList<>();
-                    for (int j = 1; j <= 7; j++) {
-                        float t = (float) j / 7f; t = t * t;
+                    for (int j = 1; j <= durt; j++) {
+                        float t = (float) j / durt; t = t * t;
                         st.add(resolveRotation(b.worldPos.lerp(through, t), dir, pn));
                     }
                     b.flightPlan = new FlightPlan(st); b.timeInMode = 0;
@@ -642,8 +799,9 @@ public final class TerraprismaRenderHandler {
                 float prr = Math.min(1f, b.timeInMode / Nr);
                 if (prr >= 1f) {
                     b.worldPos = wingHome;
-                    b.mode = BladeMode.IDLE_WING; b.timeInMode = 0;
-                    b.targetId = null; b.roundCount = 0;
+                    b.mode = BladeMode.IDLE_WING;
+                    b.phaseLabel = "A";
+                    b.timeInMode = 0; b.targetId = null; b.roundCount = 0;
                     b.curNode = new FlightPoint(wingHome, 0, 0, 0);
                     return;
                 }
@@ -655,6 +813,7 @@ public final class TerraprismaRenderHandler {
                 b.interpTo   = b.flightPlan.steps.get(hir);
                 b.worldPos = b.interpFrom.pos.lerp(b.interpTo.pos, b.interpT);
             }
+
         }
     }
 
@@ -665,7 +824,8 @@ public final class TerraprismaRenderHandler {
     private static void renderIdleWing(PoseStack stack, MultiBufferSource buffer,
                                         ItemRenderer ri, ItemStack scroll, Player player,
                                         double px, double py, double pz, float yrDeg,
-                                        int i, float age, double cx, double cy, double cz) {
+                                        int i, float age, double cx, double cy, double cz,
+                                        int sourceLevel) {
         boolean isRight = i % 2 == 0;
         double step   = i / 2.0;
         double behind = behindBase + step * behindStep;
@@ -684,6 +844,8 @@ public final class TerraprismaRenderHandler {
         stack.mulPose(Axis.XP.rotationDegrees((float)(pitchDeg - 90.0)));
         if (Math.abs(tiltAngle) > 0.01) stack.mulPose(Axis.YP.rotationDegrees((float) tiltAngle));
         stack.scale((float) scaleX, (float)(scaleY * swordLength), (float) scaleZ);
+        // 世界版边缘发光 — 8方向偏移 quad + 分级颜色
+        renderWorldEdge(stack, buffer, scroll, player, sourceLevel);
         ri.renderStatic(scroll, ItemDisplayContext.GUI, glowLight, OverlayTexture.NO_OVERLAY,
             stack, buffer, player.level(), player.getId() * 100 + i);
         stack.popPose();
@@ -721,31 +883,158 @@ public final class TerraprismaRenderHandler {
         stack.scale(renderScale, renderScale, renderScale);
         stack.translate(renderTransX, renderTransY, renderTransZ);
 
+        renderWorldEdge(stack, buffer, scroll, player, b.sourceLevel);
         ri.renderStatic(scroll, ItemDisplayContext.GUI, glowLight, OverlayTexture.NO_OVERLAY,
             stack, buffer, player.level(), player.getId() * 100 + b.index);
         stack.popPose();
     }
 
     // ═══════════════════════════════════════════════════════════
+    // 世界版边缘发光 — 8方向 quad 偏移 + 分级色
+    // ═══════════════════════════════════════════════════════════
+
+    private static void renderWorldEdge(PoseStack ps, MultiBufferSource buf,
+                                         ItemStack scroll, Player player, int sourceLevel) {
+        var tint = net.minecraft.client.yiz.util.StagedItemHelper.glowColorForLevel(sourceLevel);
+        if (tint == null) return;
+
+        var shader = net.minecraft.client.yiz.xian.render.glow.OutlineShaders.getGlowEdge();
+        if (shader == null) return;
+
+        BakedModel model = Minecraft.getInstance().getItemRenderer()
+            .getModel(scroll, player.level(), player, 0);
+        if (model == null) return;
+
+        // 设置着色器 uniform（与物品栏 mixin 一致）
+        shader.safeGetUniform("uColor").set(tint.x, tint.y, tint.z, tint.w);
+        shader.safeGetUniform("uType").set(0);
+        shader.safeGetUniform("time").set((System.currentTimeMillis() % 60000L) / 1000.0F);
+        var ss = net.minecraft.client.yiz.xian.render.glow.OutlineShaders.getScreenSize();
+        shader.safeGetUniform("screenSize").set(ss.x, ss.y);
+
+        ps.pushPose();
+        ps.translate(-0.5f, -0.5f, -0.5f);
+
+        float off = 0.02f; // 暂时放大便于观察
+        var dirs = net.minecraft.client.yiz.xian.render.glow.GlowEdgeBakedModel.getDirections(true);
+        var edgeRt = net.minecraft.client.yiz.xian.render.glow.OutlineRenderType.GLOW_EDGE;
+
+        if (buf instanceof MultiBufferSource.BufferSource bs) bs.endBatch();
+        var vc = buf.getBuffer(edgeRt);
+
+        // 调试：按 sourceLevel 映射调试色
+        float[] dbg = switch (sourceLevel) {
+            case 1 -> new float[]{1,0,0,1}; // 红
+            case 2 -> new float[]{0,1,0,1}; // 绿
+            case 3 -> new float[]{0,0,1,1}; // 蓝
+            case 4 -> new float[]{1,0,1,1}; // 紫
+            default -> new float[]{1,1,0,1}; // 黄
+        };
+        shader.safeGetUniform("uColor").set(dbg[0], dbg[1], dbg[2], dbg[3]);
+
+        for (var dir : dirs) {
+            ps.pushPose();
+            ps.translate(dir.x() * off, dir.y() * off, dir.z() * off);
+            for (BakedModel pass : model.getRenderPasses(scroll, true)) {
+                for (var quad : pass.getQuads(null, null,
+                        net.minecraft.util.RandomSource.create(),
+                        net.neoforged.neoforge.client.model.data.ModelData.EMPTY, null)) {
+                    vc.putBulkData(ps.last(), quad,
+                        dbg[0], dbg[1], dbg[2], dbg[3],
+                        15728880, OverlayTexture.NO_OVERLAY, true);
+                }
+            }
+            ps.popPose();
+        }
+
+        if (buf instanceof MultiBufferSource.BufferSource bs) bs.endBatch(edgeRt);
+        ps.popPose();
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // 工具
     // ═══════════════════════════════════════════════════════════
 
-    /** 单机通过 integrated server 对目标造成 9 点伤害并破解无敌帧 */
-    private static void tryDealDamage(BladeState b, LivingEntity target) {
+    /** 碰撞伤害 — 按 sourceLevel 查配置表执行不同伤害组合 */
+    private static void tryDealDamage(BladeState b) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null || !mc.hasSingleplayerServer()) return;
         long t = mc.level.getGameTime();
-        if (b.lastHitTick > 0 && t - b.lastHitTick < 5) return;
-        if (b.worldPos.distanceTo(target.getBoundingBox().getCenter()) > 1.8) return;
-        if (!mc.hasSingleplayerServer()) return;
-        net.minecraft.server.level.ServerLevel sl = mc.getSingleplayerServer().overworld();
-        net.minecraft.world.entity.Entity se = sl.getEntity(target.getUUID());
+        net.minecraft.server.level.ServerLevel sl = mc.getSingleplayerServer().getLevel(mc.level.dimension());
         net.minecraft.server.level.ServerPlayer sp = (net.minecraft.server.level.ServerPlayer) sl.getPlayerByUUID(mc.player.getUUID());
         if (sp == null) return;
-        if (se instanceof LivingEntity st && st.isAlive()) {
-            st.hurt(sp.damageSources().playerAttack(sp), 9f);
-            st.invulnerableTime = 0;
-            b.lastHitTick = t;
+        b.hitCooldowns.values().removeIf(v -> t - v > 6);
+
+        var spec = net.minecraft.client.yiz.xian.item.TerraprismaScrollItem.specOf(b.sourceLevel);
+
+        for (var e : mc.level.getEntities((net.minecraft.world.entity.Entity) null,
+                new AABB(b.worldPos.add(-2.5,-2.5,-2.5), b.worldPos.add(2.5,2.5,2.5)),
+                ent -> ent instanceof LivingEntity && ent != mc.player && ((LivingEntity) ent).isAlive())) {
+            if (b.hitCooldowns.containsKey(e.getUUID())) continue;
+            net.minecraft.world.entity.Entity se = sl.getEntity(e.getUUID());
+            if (!(se instanceof LivingEntity st) || !st.isAlive()) continue;
+            if (!(st instanceof Monster) && !(st instanceof net.minecraft.world.entity.monster.Enemy)
+                && !(st instanceof net.minecraft.world.entity.Mob mob && mob.getTarget() == sp)
+                && !(st.getLastHurtByMob() == sp)) continue;
+
+            // ① 假受伤动画（永远触发）
+            net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeHurt(st, sp);
+            net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeKnockback(st, b.velocity.x, b.velocity.z, 0.05);
+
+            // ② 按等级配置的原版 hurt
+            switch (spec.kind()) {
+                case PHYSICAL -> st.hurt(sp.damageSources().playerAttack(sp), (float)spec.hurtDmg());
+                case MAGIC     -> st.hurt(sp.damageSources().indirectMagic(sp, sp), (float)spec.hurtDmg());
+                default -> {} // TRUE_DAMAGE / HYBRID 不走原版 hurt
+            }
+
+            // ③ trueDamage
+            if (spec.trueDmg() > 0 && useTrueDamage)
+                net.minecraft.client.yiz.api.YizModQZKAPI.trueDamage(st, (float)spec.trueDmg(), sp);
+
+            // ④ modifyHealth
+            if (spec.modHp() > 0 && useModifyHealth) {
+                float modDmg = (float)(spec.modHp() + st.getMaxHealth() * spec.modHpPctOfMax());
+                net.minecraft.client.yiz.tool.health.EntityASMUtil.modifyHealth(st, -modDmg);
+            }
+
+            // 禁疗
+            if (spec.antiHealSec() > 0) applyAntiHeal(se.getUUID(), spec.antiHealSec(), spec.antiHealCapSec());
+
+            ((LivingEntity) e).hurtTime = 10;
+            b.hitCooldowns.put(e.getUUID(), t);
+        }
+    }
+
+    // ═══ 禁疗系统 ═══
+    private static final Map<UUID, Long> ANTI_HEAL_EXPIRE = new HashMap<>();
+    private static final Map<UUID, Integer> ANTI_HEAL_CAP = new HashMap<>();
+
+    private static void applyAntiHeal(UUID targetId, int addSec, int capSec) {
+        long now = System.currentTimeMillis();
+        long remaining = Math.max(0, ANTI_HEAL_EXPIRE.getOrDefault(targetId, 0L) - now);
+        // 叠加后不超过上限
+        long total = Math.min(remaining + addSec * 1000L, capSec * 1000L);
+        ANTI_HEAL_EXPIRE.put(targetId, now + total);
+    }
+
+    /** 检查目标是否处于禁疗状态（由 HealMixin 调用） */
+    public static boolean isAntiHealed(UUID targetId) {
+        Long exp = ANTI_HEAL_EXPIRE.get(targetId);
+        return exp != null && System.currentTimeMillis() < exp;
+    }
+
+    /** 检测玩家左键攻击的实体，设为最高优先级指令目标（3秒过期） */
+    private static void updateCommandTarget(Minecraft mc) {
+        long now = System.currentTimeMillis();
+        CMD_TARGET_EXPIRE.values().removeIf(t -> now - t > 3000);
+        UUID puid = mc.player.getUUID();
+        if (mc.options.keyAttack.isDown() && mc.hitResult instanceof EntityHitResult ehr
+                && ehr.getEntity() instanceof LivingEntity le && le.isAlive()) {
+            PLAYER_CMD_TARGET.put(puid, le.getUUID());
+            CMD_TARGET_EXPIRE.put(le.getUUID(), now);
+        } else if (!mc.options.keyAttack.isDown()) {
+            CMD_TARGET_EXPIRE.computeIfPresent(PLAYER_CMD_TARGET.get(puid), (k, v) -> now - v > 3000 ? null : v);
         }
     }
 
@@ -753,11 +1042,37 @@ public final class TerraprismaRenderHandler {
         List<LivingEntity> list = new ArrayList<>();
         for (var e : player.level().getEntities(player,
                 player.getBoundingBox().inflate(targetRange),
-                e -> e instanceof Monster && ((LivingEntity) e).isAlive())) {
+                e -> e instanceof LivingEntity le && le.isAlive() && le != player
+                    && isThreatToPlayer(le, player))) {
             list.add((LivingEntity) e);
         }
         list.sort(Comparator.comparingDouble(player::distanceToSqr));
         return list;
+    }
+
+    /**
+     * 通用敌意判断。客户端预筛 + 服务端 target 精确判定。
+     *  不会误伤友善生物（牛羊等 canAttack 也返回 true 但不设 target）。
+     */
+    private static boolean isThreatToPlayer(LivingEntity le, Player player) {
+        // 客户端快速筛查
+        if (le instanceof Monster) return true;
+        if (le instanceof net.minecraft.world.entity.monster.Enemy) return true;
+        if (le.getLastHurtByMob() == player) return true;
+        // 服务端精确检测：只有 target 指向玩家 / 有任意 target 的才算
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.hasSingleplayerServer()) {
+            net.minecraft.server.level.ServerLevel sl = mc.getSingleplayerServer().getLevel(mc.level.dimension());
+            net.minecraft.world.entity.Entity se = sl.getEntity(le.getUUID());
+            net.minecraft.server.level.ServerPlayer sp =
+                (net.minecraft.server.level.ServerPlayer) sl.getPlayerByUUID(player.getUUID());
+            if (se instanceof net.minecraft.world.entity.Mob sm) {
+                if (sm.getTarget() == sp) return true;       // 锁定玩家
+                if (sm.getTarget() != null) return true;     // 无差别敌对（史莱姆等）
+            }
+            if (se instanceof LivingEntity sle && sle.getLastHurtByMob() == sp) return true;
+        }
+        return false;
     }
 
     private static LivingEntity findTarget(Player player, UUID id) {
@@ -783,11 +1098,12 @@ public final class TerraprismaRenderHandler {
         return new Vec3(px + lx*cs + lz*sn, py + bodyY, pz + -lx*sn + lz*cs);
     }
 
-    private static ItemStack findScroll(Player player) {
+    private static List<ItemStack> findAllScrolls(Player player) {
+        List<ItemStack> result = new ArrayList<>();
         for (ItemStack s : player.getInventory().items) {
-            if (s.getItem() instanceof net.minecraft.client.yiz.xian.item.TerraprismaScrollItem) return s;
+            if (s.getItem() instanceof net.minecraft.client.yiz.xian.item.TerraprismaScrollItem) result.add(s);
         }
-        return ItemStack.EMPTY;
+        return result;
     }
 
     private static int indexOf(UUID[] arr, UUID id) {
@@ -803,6 +1119,50 @@ public final class TerraprismaRenderHandler {
             if (g > mg) { mg = g; best = i; }
         }
         return best;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 调试 HUD — 屏幕左侧显示每剑当前阶段
+    // ═══════════════════════════════════════════════════════════
+
+    public static void onRenderGui(RenderGuiEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
+        var gui = event.getGuiGraphics();
+        var font = mc.font;
+        UUID puid = mc.player.getUUID();
+        BladeState[] blades = BLADES.get(puid);
+        if (blades == null || blades.length == 0) return;
+
+        int x = 4, y = 4;
+        int count = 0;
+        for (BladeState b : blades) {
+            if (b == null) continue;
+            count++;
+        }
+
+        gui.drawString(font, "§l§n 泰拉棱镜 [" + count + "/" + blades.length + "]", x, y, 0xFFFFFFFF);
+        y += 12;
+
+        // 按阶段分组显示
+        String[] phaseNames = {"A:翅膀", "B:上升", "C:俯冲", "D:椭圆", "E:穿刺", "F:归巢", "G:追击"};
+        String[] phaseKeys  = {"A","B","C","D","E","F","G"};
+        for (int pi = 0; pi < phaseKeys.length; pi++) {
+            StringBuilder sb = new StringBuilder(phaseNames[pi] + "  ");
+            int cnt = 0;
+            for (BladeState b : blades) {
+                if (b != null && phaseKeys[pi].equals(b.phaseLabel)) {
+                    if (cnt > 0) sb.append(",");
+                    if (cnt >= 12) { sb.append("…"); break; }
+                    sb.append(b.index);
+                    cnt++;
+                }
+            }
+            if (cnt == 0) continue;
+            int color = cnt > 10 ? 0xFF00FF00 : cnt > 5 ? 0xFFFFFF00 : cnt > 0 ? 0xFFFF8800 : 0xFFFF0000;
+            gui.drawString(font, sb.toString(), x, y, color);
+            y += 10;
+        }
     }
 
     private static double pseudoRand(int index, int salt) {

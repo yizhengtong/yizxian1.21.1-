@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.api.RealmStage;
 import net.minecraft.client.yiz.xian.item.TalentCoreItem;
+import net.minecraft.client.yiz.xian.render.TerraprismaRenderHandler;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -27,6 +28,12 @@ public final class YizxianCommand {
                 .then(Commands.literal("jj")
                     .then(Commands.argument("stage", IntegerArgumentType.integer(1, 4))
                         .executes(YizxianCommand::setRealmStage)
+                    )
+                )
+                .then(Commands.literal("bypass")
+                    .executes(YizxianCommand::showBypass)
+                    .then(Commands.argument("layer", IntegerArgumentType.integer(3, 4))
+                        .executes(YizxianCommand::toggleBypass)
                     )
                 )
                 .then(Commands.literal("talent")
@@ -97,6 +104,37 @@ public final class YizxianCommand {
         } else {
             source.sendFailure(Component.literal("设置失败，可能已经是 " + target.displayName()));
         }
+        return 1;
+    }
+
+    /** /yizxian bypass — 显示当前开关状态 */
+    private static int showBypass(CommandContext<CommandSourceStack> ctx) {
+        ctx.getSource().sendSuccess(
+            () -> Component.literal(
+                "③trueDamage=" + (TerraprismaRenderHandler.useTrueDamage ? "§aON" : "§cOFF")
+                + "§r  ④modifyHealth=" + (TerraprismaRenderHandler.useModifyHealth ? "§aON" : "§cOFF")),
+            true
+        );
+        return 1;
+    }
+
+    /** /yizxian bypass 3|4 — 独立切换指定层 */
+    private static int toggleBypass(CommandContext<CommandSourceStack> ctx) {
+        int layer = IntegerArgumentType.getInteger(ctx, "layer");
+        boolean now;
+        if (layer == 3) {
+            TerraprismaRenderHandler.useTrueDamage = !TerraprismaRenderHandler.useTrueDamage;
+            now = TerraprismaRenderHandler.useTrueDamage;
+        } else {
+            TerraprismaRenderHandler.useModifyHealth = !TerraprismaRenderHandler.useModifyHealth;
+            now = TerraprismaRenderHandler.useModifyHealth;
+        }
+        String label = layer == 3 ? "③trueDamage" : "④modifyHealth";
+        boolean finalNow = now;
+        ctx.getSource().sendSuccess(
+            () -> Component.literal(label + " → " + (finalNow ? "§aON" : "§cOFF")),
+            true
+        );
         return 1;
     }
 }

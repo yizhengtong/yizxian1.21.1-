@@ -1,0 +1,105 @@
+package net.minecraft.client.yiz.xian.entity;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.resources.ResourceLocation;
+import org.joml.Vector3f;
+
+/**
+ * 泰拉棱镜浮游剑实体渲染器。
+ * <ul>
+ *   <li>双面渲染（正面+背面可见）</li>
+ *   <li>固定亮度 15728880（等效亮度等级 10 发光）</li>
+ *   <li>彩色拖尾粒子</li>
+ * </ul>
+ */
+public class TerraprismaRenderer extends EntityRenderer<TerraprismaEntity> {
+
+    private static final ResourceLocation TEXTURE =
+        ResourceLocation.fromNamespaceAndPath("yizxianmod", "textures/entity/terraprisma.png");
+
+    private static final RenderType RENDER_TYPE =
+        RenderType.entityCutoutNoCull(TEXTURE);
+
+    /** 固定亮度：sky=15, block=15 → 始终高亮（发光效果） */
+    private static final int GLOW_LIGHT = 15728880;
+
+    private final TerraprismaModel model;
+
+    public TerraprismaRenderer(EntityRendererProvider.Context ctx) {
+        super(ctx);
+        this.model = new TerraprismaModel(ctx.bakeLayer(TerraprismaModel.LAYER_LOCATION));
+    }
+
+    @Override
+    public ResourceLocation getTextureLocation(TerraprismaEntity entity) {
+        return TEXTURE;
+    }
+
+    @Override
+    public void render(TerraprismaEntity entity, float entityYaw, float partialTick,
+                       PoseStack stack, MultiBufferSource buffer, int packedLight) {
+        stack.pushPose();
+
+        // 剑尖朝向飞行方向（通过实体存储的 motion 或 yRot）
+        float yRot = entity.getVisualYRot(partialTick);
+        stack.mulPose(Axis.YP.rotationDegrees(-yRot + 180.0F));
+        stack.mulPose(Axis.XP.rotationDegrees(entity.getVisualXRot(partialTick)));
+
+        // 拖尾粒子
+        if (entity.tickCount % 2 == 0) {
+            spawnTrailParticle(entity);
+        }
+
+        VertexConsumer consumer = buffer.getBuffer(RENDER_TYPE);
+        this.model.renderToBuffer(stack, consumer, GLOW_LIGHT, OverlayTexture.NO_OVERLAY);
+
+        stack.popPose();
+        super.render(entity, entityYaw, partialTick, stack, buffer, packedLight);
+    }
+
+    /** 彩色拖尾粒子（临时用 endRod + 随机颜色） */
+    private void spawnTrailParticle(TerraprismaEntity entity) {
+        if (entity.level().isClientSide) {
+            float hue = (entity.tickCount * 7) % 360;
+            int rgb = hsvToRgb(hue / 360f, 0.8f, 1.0f);
+            float r = ((rgb >> 16) & 0xFF) / 255f;
+            float g = ((rgb >> 8) & 0xFF) / 255f;
+            float b = (rgb & 0xFF) / 255f;
+            entity.level().addParticle(
+                new DustParticleOptions(new Vector3f(r, g, b), 0.6f),
+                entity.getX(), entity.getY(), entity.getZ(),
+                0.0, 0.0, 0.0);
+        }
+    }
+
+    private static int hsvToRgb(float h, float s, float v) {
+        int i = (int) (h * 6.0f);
+        float f = h * 6.0f - i;
+        float p = v * (1.0f - s);
+        float q = v * (1.0f - f * s);
+        float t = v * (1.0f - (1.0f - f) * s);
+        return switch (i % 6) {
+            case 0 -> toRgbInt(v, t, p);
+            case 1 -> toRgbInt(q, v, p);
+            case 2 -> toRgbInt(p, v, t);
+            case 3 -> toRgbInt(p, q, v);
+            case 4 -> toRgbInt(t, p, v);
+            default -> toRgbInt(v, p, q);
+        };
+    }
+
+    private static int toRgbInt(float r, float g, float b) {
+        int ri = Math.round(r * 255);
+        int gi = Math.round(g * 255);
+        int bi = Math.round(b * 255);
+        return (ri << 16) | (gi << 8) | bi;
+    }
+}
