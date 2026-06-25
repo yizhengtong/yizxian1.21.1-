@@ -43,7 +43,6 @@ public abstract class TerraBladeThirdPersonMixin {
 
     private static final float[] BUF = new float[9];
     private static long swingStartMs = 0;
-    private static boolean wasAttacking = false; // 滞后防抖
 
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
     private void yizxian_tp(
@@ -54,7 +53,7 @@ public abstract class TerraBladeThirdPersonMixin {
         if (arm == HumanoidArm.LEFT) return;
         ci.cancel();
 
-        // ── 攻击进度 ──
+        // ── 与第一人称完全相同的 swing timer ──
         boolean attacking = false;
         if (entity instanceof Player player && player.swinging) {
             long now = System.currentTimeMillis();
@@ -63,25 +62,18 @@ public abstract class TerraBladeThirdPersonMixin {
             if (cd <= 0f) cd = 20f;
             float duration = cd / 20f;
             float elapsed = (now - swingStartMs) / 1000f;
-            if (elapsed < duration) {
-                float s = (float) Math.sin((elapsed / duration) * Math.PI);
-                // 滞后阈值：进>0.05, 出<0.01 防鬼畜
-                if (!wasAttacking && s > 0.05f) wasAttacking = true;
-                if (wasAttacking && s < 0.01f) wasAttacking = false;
-                if (wasAttacking) {
-                    attacking = true;
-                    int idx = ComboStateMachine.getCurrentAnimIndex(player);
-                    if (idx < 0) idx = 0;
-                    interpolate(KF_TP, s, BUF);
-                    net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.set(BUF);
-                }
-            } else {
+            if (elapsed >= duration) {
                 swingStartMs = 0;
-                wasAttacking = false;
+            } else {
+                float s = (float) Math.sin((elapsed / duration) * Math.PI); // 0→1→0
+                attacking = true;
+                int idx = ComboStateMachine.getCurrentAnimIndex(player);
+                if (idx < 0) idx = 0;
+                interpolate(KF_TP, s, BUF);
+                net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.set(BUF);
             }
         } else {
             swingStartMs = 0;
-            wasAttacking = false;
         }
 
         invokeRenderArmWithItem(entity, stack,
