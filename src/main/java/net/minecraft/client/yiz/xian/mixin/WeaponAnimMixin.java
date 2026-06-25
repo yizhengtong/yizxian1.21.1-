@@ -24,7 +24,8 @@ public abstract class WeaponAnimMixin {
 
     private static final int COOLDOWN_TICKS = 24;
 
-    @Shadow public int attackStrengthTicker;
+    @Accessor
+    public abstract int getAttackStrengthTicker();
 
     // ── 二值化 + 焊死冷却: 用 COOLDOWN_TICKS 算比例，阈值化 ──
 
@@ -33,7 +34,7 @@ public abstract class WeaponAnimMixin {
         Player self = (Player) (Object) this;
         if (!(self.getMainHandItem().getItem() instanceof ILeftHandRender)) return;
 
-        float raw = (attackStrengthTicker + adjustTicks) / (float) COOLDOWN_TICKS;
+        float raw = (getAttackStrengthTicker() + adjustTicks) / (float) COOLDOWN_TICKS;
         cir.setReturnValue(raw >= 1.0f ? 1.0f : 0.0f);
     }
 
