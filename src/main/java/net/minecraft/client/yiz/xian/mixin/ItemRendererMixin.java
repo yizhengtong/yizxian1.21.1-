@@ -43,7 +43,7 @@ public abstract class ItemRendererMixin {
             if (kf != null) {
                 ci.cancel();
                 ps.pushPose();
-                ps.translate(kf[3] / 16f, kf[4] / 16f, kf[5] / 16f);
+                ps.translate(-kf[3] / 16f, kf[4] / 16f, kf[5] / 16f); // X 取反修复左右方向
                 ps.mulPose(new Quaternionf().rotationXYZ(
                     (float)Math.toRadians(kf[0]), (float)Math.toRadians(kf[1]), (float)Math.toRadians(kf[2])));
                 ps.scale(kf[6], kf[7], kf[8]);
