@@ -11,6 +11,7 @@ import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 import net.minecraft.client.yiz.xian.render.AnimationPreviewRenderer;
 import net.minecraft.client.yiz.xian.render.TerraprismaRenderHandler;
+import net.minecraft.client.yiz.xian.render.ThirdPersonWeaponRenderer;
 import net.minecraft.client.yiz.xian.render.glow.GlowEdgeBakedModel;
 import net.minecraft.client.yiz.xian.render.glow.OutlineShaders;
 import net.minecraft.client.Minecraft;
@@ -42,6 +43,9 @@ public class YizxianModClient {
 
         // 泰拉棱镜渲染 — 直接在世界中绘制浮游剑
         NeoForge.EVENT_BUS.addListener(TerraprismaRenderHandler::onRenderLevel);
+
+        // 第三人称武器独立渲染 — 手部世界坐标 + 攻击动画
+        NeoForge.EVENT_BUS.addListener(ThirdPersonWeaponRenderer::onRenderLevel);
 
         // 动画预览 — /yizxian animpreview 命令循环播放 BB 动画
         NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent event) -> {
