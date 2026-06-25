@@ -1,12 +1,8 @@
 package net.minecraft.client.yiz.xian.mixin;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
-import net.minecraft.client.yiz.xian.api.BlockbenchAnimParser;
 import net.minecraft.client.yiz.xian.api.ComboStateMachine;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.util.Mth;
@@ -15,19 +11,26 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 第三人称：
- * - 待机（非攻击中）：走原版渲染，使用模型自带的 thirdperson_lefthand 姿态
- * - 攻击中：取消原版，手动复刻左臂定位 + 关键帧动画
+ * 第三人称：ILeftHandRender 武器强制 LEFT 手管线 + 攻击关键帧动画。
+ * 关键帧来自用户 1~4.bbmodel 的 thirdperson_lefthand display transform。
  */
 @Mixin(ItemInHandLayer.class)
 public abstract class TerraBladeThirdPersonMixin {
+
+    @Invoker("renderArmWithItem")
+    public abstract void invokeRenderArmWithItem(
+        LivingEntity entity, ItemStack stack, ItemDisplayContext ctx, HumanoidArm arm,
+        PoseStack ps, MultiBufferSource buf, int light
+    );
 
     private static final float[][] KF = {
         {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
@@ -45,51 +48,36 @@ public abstract class TerraBladeThirdPersonMixin {
     ) {
         if (!(stack.getItem() instanceof ILeftHandRender)) return;
         if (arm == HumanoidArm.LEFT) return;
-        if (!(entity instanceof Player player)) return;
-
-        // 待机：走原版（模型 thirdperson_lefthand 姿态）→ 不取消
-        long now = System.currentTimeMillis();
-        if (player.swinging && swingStartMs == 0) swingStartMs = now;
-        float cd = player.getCurrentItemAttackStrengthDelay();
-        if (cd <= 0f) cd = 20f;
-        float elapsed = (now - swingStartMs) / 1000f;
-        if (elapsed >= cd / 20f) { swingStartMs = 0; return; }
-        float swing = (float) Math.sin((elapsed / (cd / 20f)) * Math.PI);
-        if (swing <= 0f) return;
-
-        // 攻击中：取消原版，关键帧动画
         ci.cancel();
 
-        int idx = ComboStateMachine.getCurrentAnimIndex(player);
-        if (idx < 0) idx = 0;
-        interpolate(KF, swing, BUF);
+        Player player = entity instanceof Player p ? p : null;
 
-        ItemRenderer ir = Minecraft.getInstance().getItemRenderer();
-        ps.pushPose();
+        // ── 攻击关键帧 ──
+        if (player != null && player.swinging) {
+            long now = System.currentTimeMillis();
+            if (swingStartMs == 0) swingStartMs = now;
+            float cd = player.getCurrentItemAttackStrengthDelay();
+            if (cd <= 0f) cd = 20f;
+            float elapsed = (now - swingStartMs) / 1000f;
+            if (elapsed < cd / 20f) {
+                float s = (float) Math.sin((elapsed / (cd / 20f)) * Math.PI);
+                if (s > 0f) {
+                    int idx = ComboStateMachine.getCurrentAnimIndex(player);
+                    if (idx < 0) idx = 0;
+                    interpolate(KF, s, BUF);
+                    ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
+                    ps.mulPose(new Quaternionf().rotationXYZ(
+                        (float)Math.toRadians(BUF[0]), (float)Math.toRadians(BUF[1]), (float)Math.toRadians(BUF[2])));
+                    ps.scale(BUF[6], BUF[7], BUF[8]);
+                }
+            } else {
+                swingStartMs = 0;
+            }
+        }
 
-        // 复刻原版 LEFT + ITEM pose 左臂定位
-        ps.translate(5.0f / 16.0f, 2.0f / 16.0f, 3.0f / 16.0f);
-        ps.mulPose(Axis.XP.rotationDegrees(-90));
-        ps.mulPose(Axis.YP.rotationDegrees(180));
-        ps.translate(0, 0, -1.0f / 16.0f);
-        ps.mulPose(Axis.YP.rotationDegrees(180));
-
-        // 关键帧 display transform
-        ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
-        ps.mulPose(new Quaternionf().rotationXYZ(
-            (float) Math.toRadians(BUF[0]),
-            (float) Math.toRadians(BUF[1]),
-            (float) Math.toRadians(BUF[2])));
-        ps.scale(BUF[6], BUF[7], BUF[8]);
-
-        ps.mulPose(new Quaternionf()
-            .rotateZ((float) Math.toRadians(BlockbenchAnimParser.elemRotZ))
-            .rotateY((float) Math.toRadians(BlockbenchAnimParser.elemRotY))
-            .rotateX((float) Math.toRadians(BlockbenchAnimParser.elemRotX)));
-
-        ir.renderStatic(stack, ItemDisplayContext.NONE, light, 0,
-            ps, buf, entity.level(), entity.getId());
-        ps.popPose();
+        invokeRenderArmWithItem(entity, stack,
+            ItemDisplayContext.THIRD_PERSON_LEFT_HAND, HumanoidArm.LEFT,
+            ps, buf, light);
     }
 
     private static void interpolate(float[][] kfs, float t, float[] out) {
