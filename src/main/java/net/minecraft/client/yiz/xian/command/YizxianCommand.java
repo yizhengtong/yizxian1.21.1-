@@ -14,7 +14,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -46,7 +45,7 @@ public final class YizxianCommand {
         );
     }
 
-    /** /yizxian talent <effect_id> <max_level> — 给玩家一个含指定效果的 talent_core */
+    /** /yizxian talent <effect_id> <max_level> */
     private static int giveTalent(CommandContext<CommandSourceStack> ctx) {
         String effectIdStr = StringArgumentType.getString(ctx, "effect_id");
         int maxLevel = IntegerArgumentType.getInteger(ctx, "max_level");
@@ -87,11 +86,10 @@ public final class YizxianCommand {
 
         List<RealmStage> stages = RealmProgressionAPI.getAllStages();
         if (stages.size() < 4) {
-            source.sendFailure(Component.literal("境界还没注册全，先确认 RealmStages.register() 调用没"));
+            source.sendFailure(Component.literal("境界还没注册全"));
             return 0;
         }
 
-        // index 1→排序0（筑命），2→1（谌我），3→2（揖别），4→3（证我）
         RealmStage target = stages.get(index - 1);
         ResourceLocation id = target.id();
 
@@ -107,7 +105,6 @@ public final class YizxianCommand {
         return 1;
     }
 
-    /** /yizxian bypass — 显示当前开关状态 */
     private static int showBypass(CommandContext<CommandSourceStack> ctx) {
         ctx.getSource().sendSuccess(
             () -> Component.literal(
@@ -118,7 +115,6 @@ public final class YizxianCommand {
         return 1;
     }
 
-    /** /yizxian bypass 3|4 — 独立切换指定层 */
     private static int toggleBypass(CommandContext<CommandSourceStack> ctx) {
         int layer = IntegerArgumentType.getInteger(ctx, "layer");
         boolean now;

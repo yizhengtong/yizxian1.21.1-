@@ -11,7 +11,6 @@ import net.minecraft.client.yiz.effect.parent.ParentType;
 import net.minecraft.client.yiz.effect.perception.EntityPerception;
 import net.minecraft.client.yiz.effect.rarity.Rarity;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.server.level.ServerPlayer;

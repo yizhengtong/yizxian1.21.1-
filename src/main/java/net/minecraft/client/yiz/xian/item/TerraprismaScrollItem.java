@@ -1,11 +1,11 @@
 package net.minecraft.client.yiz.xian.item;
 
-import net.minecraft.client.yiz.api.IWeaponItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -15,7 +15,7 @@ import net.minecraft.world.level.Level;
 
 import java.util.List;
 
-public class TerraprismaScrollItem extends Item implements IWeaponItem {
+public class TerraprismaScrollItem extends SummonWeaponItem {
 
     private static final String COUNT_KEY = "yizxianmod:sword_count";
     private final int level;
@@ -93,6 +93,39 @@ public class TerraprismaScrollItem extends Item implements IWeaponItem {
     public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
         int count = getSwordCount(stack);
         tooltip.add(Component.literal("§7唤剑: §f" + count + "§7/§f" + spec.maxSwords));
+    }
+
+    // ═══ SummonWeaponItem 钩子 ═══
+
+    @Override
+    public int getSummonCount(ItemStack weapon) {
+        return getSwordCount(weapon);
+    }
+
+    @Override
+    public int getMaxSummonCount(ItemStack weapon) {
+        return spec.maxSwords;
+    }
+
+    @Override
+    public void increaseCount(ItemStack weapon) {
+        int cur = getSwordCount(weapon);
+        if (cur < spec.maxSwords) setSwordCount(weapon, cur + 1);
+    }
+
+    @Override
+    public void decreaseCount(ItemStack weapon) {
+        int cur = getSwordCount(weapon);
+        if (cur > 0) setSwordCount(weapon, cur - 1);
+    }
+
+    @Override
+    public boolean onSummonAttack(Player attacker, LivingEntity target, ItemStack weapon) {
+        // 子类自己的攻击逻辑 —— 会心一击突进 + 伤害
+        var dir = target.position().subtract(attacker.position()).normalize();
+        attacker.setDeltaMovement(dir.scale(1.5));
+        attacker.hurtMarked = true;
+        return true;
     }
 
     // ═══ NBT 读写 ═══

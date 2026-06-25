@@ -1,0 +1,14 @@
+{
+  "mappings": {
+    "net/minecraft/client/yiz/xian/mixin/InventoryScreenMixin": {
+      "leftPos": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;leftPos:I",
+      "topPos": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;topPos:I",
+      "imageWidth": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;imageWidth:I",
+      "imageHeight": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;imageHeight:I",
+      "height": "Lnet/minecraft/client/gui/screens/Screen;height:I",
+      "menu": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;menu:Lnet/minecraft/world/inventory/InventoryMenu;",
+      "font": "Lnet/minecraft/client/gui/screens/Screen;font:Lnet/minecraft/client/gui/Font;",
+      "minecraft": "Lnet/minecraft/client/gui/screens/Screen;minecraft:Lnet/minecraft/client/Minecraft;"
+    }
+  }
+}

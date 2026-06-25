@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.xian.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -8,6 +9,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.yiz.client.render.HandheldPanelRenderer;
 import net.minecraft.client.yiz.client.render.HandheldPanelRenderer.PanelInfo;
 import net.minecraft.client.yiz.windowmapper.WindowCaptureManager;
+import net.minecraft.client.yiz.xian.api.BlockbenchAnimLoader;
+import net.minecraft.client.yiz.xian.render.AnimationPreviewRenderer;
 import net.minecraft.client.yiz.xian.render.TerraprismaConfigScreen;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -55,6 +58,16 @@ public final class YizxianClientCommand {
                     .then(Commands.argument("preset", IntegerArgumentType.integer(0, 5))
                         .executes(YizxianClientCommand::setOutline))
                 )
+                .then(Commands.literal("animpreview")
+                    .then(Commands.argument("anim", IntegerArgumentType.integer(0, 3))
+                        .executes(YizxianClientCommand::startAnimPreview))
+                    .then(Commands.literal("stop")
+                        .executes(YizxianClientCommand::stopAnimPreview)))
+                .then(Commands.literal("pivot")
+                    .then(Commands.argument("x", FloatArgumentType.floatArg(-2f, 2f))
+                        .then(Commands.argument("y", FloatArgumentType.floatArg(-2f, 2f))
+                            .then(Commands.argument("z", FloatArgumentType.floatArg(-2f, 2f))
+                                .executes(YizxianClientCommand::setPivot)))))
         );
     }
 
@@ -165,4 +178,54 @@ public final class YizxianClientCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("面板 #" + id + " 已切换模式"), false);
         return 1;
     }
+
+    /** /yizxian animpreview <0|1|2|3> — 在面前 2 格处循环播放动画预览 */
+    private static int startAnimPreview(CommandContext<CommandSourceStack> ctx) {
+        int idx = IntegerArgumentType.getInteger(ctx, "anim");
+        var player = Minecraft.getInstance().player;
+        if (player == null) return 0;
+
+        // 查找手中有 ILeftHandRender 武器的物品，否则用快捷栏第一个 TerraBlade
+        var stack = player.getMainHandItem();
+        if (!(stack.getItem() instanceof net.minecraft.client.yiz.xian.api.ILeftHandRender)) {
+            for (int i = 0; i < 9; i++) {
+                var s = player.getInventory().getItem(i);
+                if (s.getItem() instanceof net.minecraft.client.yiz.xian.api.ILeftHandRender) {
+                    stack = s;
+                    break;
+                }
+            }
+        }
+
+        var pos = player.getEyePosition().add(player.getLookAngle().scale(2.0));
+        AnimationPreviewRenderer.start(idx, stack, pos);
+
+        String[] names = {"左平砍","右平砍","左下→左上","左上→右下"};
+        ctx.getSource().sendSuccess(
+            () -> Component.literal("动画预览: §e" + names[idx] + " §7(绕圈观察 /stop 停止)"), false);
+        return 1;
+    }
+
+    /** /yizxian animpreview stop */
+    private static int stopAnimPreview(CommandContext<CommandSourceStack> ctx) {
+        AnimationPreviewRenderer.stop();
+        ctx.getSource().sendSuccess(
+            () -> Component.literal("动画预览已停止"), false);
+        return 1;
+    }
+
+    /** /yizxian pivot <x> <y> <z> — 设置旋转枢轴（方块单位，相对模型中心） */
+    private static int setPivot(CommandContext<CommandSourceStack> ctx) {
+        float x = FloatArgumentType.getFloat(ctx, "x");
+        float y = FloatArgumentType.getFloat(ctx, "y");
+        float z = FloatArgumentType.getFloat(ctx, "z");
+        BlockbenchAnimLoader.pivotX = x;
+        BlockbenchAnimLoader.pivotY = y;
+        BlockbenchAnimLoader.pivotZ = z;
+        ctx.getSource().sendSuccess(
+            () -> Component.literal(String.format(
+                "枢轴 → (%.2f, %.2f, %.2f) §7绕此点旋转", x, y, z)), false);
+        return 1;
+    }
+
 }

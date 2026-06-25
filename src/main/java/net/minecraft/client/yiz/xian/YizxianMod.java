@@ -9,21 +9,24 @@ import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.util.StagedItemHelper;
 import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
-import net.minecraft.client.yiz.core.registry.ModRegistries;
 import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.client.yiz.xian.api.ComboStateMachine;
+import net.minecraft.client.yiz.xian.api.ILeftHandRender;
+
 import net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect;
 import net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider;
 import net.minecraft.client.yiz.xian.effect.SharpBladeEffect;
 import net.minecraft.client.yiz.xian.item.GeneralItemItem;
 import net.minecraft.client.yiz.xian.item.SkillScrollItem;
 import net.minecraft.client.yiz.xian.item.TalentCoreItem;
+import net.minecraft.client.yiz.xian.item.MuramasaItem;
+import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 import net.minecraft.client.yiz.xian.item.WeaponCoreItem;
 import net.minecraft.client.yiz.xian.realm.BreakthroughHandler;
 import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
 import net.minecraft.client.yiz.xian.realm.RealmStages;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -62,10 +65,18 @@ public class YizxianMod {
         ITEMS.register("general_item", GeneralItemItem::new);
     public static final Supplier<Item> WEAPON_CORE =
         ITEMS.register("weapon_core", WeaponCoreItem::new);
-    // 泰拉棱镜卷轴 — 5 等级（规则A）
+    // 泰拉棱镜卷轴 — 5 等级
     public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
         StagedItemHelper.registerStaged(ITEMS, "terraprisma_scroll", 5,
             level -> new TerraprismaScrollItem(level));
+    // 泰拉刃 — 5 等级（近战武器）
+    public static final List<Supplier<Item>> TERRA_BLADES =
+        StagedItemHelper.registerStaged(ITEMS, "terra_blade", 5,
+            TerraBladeItem::new);
+    // 村正 — 5 等级（近战武器）
+    public static final List<Supplier<Item>> MURAMASAS =
+        StagedItemHelper.registerStaged(ITEMS, "muramasa", 5,
+            MuramasaItem::new);
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
@@ -84,6 +95,9 @@ public class YizxianMod {
 
         // ---- yiz-qzk integration ----
         PlayerDataAPI.register("yizxgmod:star_body", Codec.BOOL, false);
+        PlayerDataAPI.register("yizxianmod:attack_anim_index", Codec.INT, 0);
+        PlayerDataAPI.register("yizxianmod:combo_step", Codec.INT, -1);
+        PlayerDataAPI.register("yizxianmod:combo_tick", Codec.INT, 0);
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
         PlayerDataAPI.register(CriticalStrikeEffect.DATA_TIMER, Codec.intRange(0, 100), 0);
         PlayerDataAPI.register(CriticalStrikeEffect.DATA_TARGET, Codec.STRING, "");
@@ -110,6 +124,8 @@ public class YizxianMod {
     private void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.COMBAT) {
             for (var s : TERRAPRISMA_SCROLLS) event.accept(s.get());
+            for (var s : TERRA_BLADES) event.accept(s.get());
+            for (var s : MURAMASAS) event.accept(s.get());
         }
     }
 
@@ -156,6 +172,15 @@ public class YizxianMod {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             BreakthroughHandler.checkAndBreakthrough(serverPlayer);
             RealmAttributeHandler.applyHealthRegen(serverPlayer);
+            // 连招 tick 计数
+            var held = serverPlayer.getMainHandItem();
+            if (held.getItem() instanceof ILeftHandRender) {
+                ComboStateMachine.tick(serverPlayer);
+            } else {
+                ComboStateMachine.reset(serverPlayer);
+            }
+
+
         }
     }
 

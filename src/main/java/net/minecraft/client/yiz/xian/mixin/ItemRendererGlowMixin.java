@@ -238,10 +238,6 @@ public abstract class ItemRendererGlowMixin {
 
     private static Vector4f evenGlow(Vector4f base) { return base; }
 
-    private static float clamp01(float v) {
-        return v < 0f ? 0f : v > 1f ? 1f : v;
-    }
-
     // ═══════════════════════════════════════════════════════════════=
     //  工具
     // ═══════════════════════════════════════════════════════════════=

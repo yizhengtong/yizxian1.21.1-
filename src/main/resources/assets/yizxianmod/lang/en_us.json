@@ -5,5 +5,12 @@
   "item.yizxianmod.weapon_core": "Weapon Core",
   "item.yizxianmod.terraprisma_scroll_1": "Terraprisma Scroll",
   "item.yizxianmod.terraprisma_scroll_2": "Terraprisma Scroll·Refined",
-  "item.yizxianmod.terraprisma_scroll_3": "Terraprisma Scroll·Ultimate"
+  "item.yizxianmod.terraprisma_scroll_3": "Terraprisma Scroll·Fine",
+  "item.yizxianmod.terraprisma_scroll_4": "Terraprisma Scroll·Epic",
+  "item.yizxianmod.terraprisma_scroll_5": "Terraprisma Scroll·Legendary",
+  "item.yizxianmod.terra_blade_1": "Terra Blade",
+  "item.yizxianmod.terra_blade_2": "Terra Blade·Refined",
+  "item.yizxianmod.terra_blade_3": "Terra Blade·Fine",
+  "item.yizxianmod.terra_blade_4": "Terra Blade·Epic",
+  "item.yizxianmod.terra_blade_5": "Terra Blade·Legendary"
 }

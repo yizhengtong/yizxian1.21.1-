@@ -3,7 +3,6 @@ package net.minecraft.client.yiz.xian.realm;
 import net.minecraft.client.yiz.api.*;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 /**

@@ -1,11 +1,16 @@
 {
   "required": true,
   "package": "net.minecraft.client.yiz.xian.mixin",
+  "refmap": "yizxianmod.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HealMixin",
-    "KillBypassMixin",
-    "ItemRendererGlowMixin"
+    "InventoryScreenMixin",
+    "WeaponAnimMixin",
+    "TerraBladeFirstPersonMixin",
+    "TerraBladeThirdPersonMixin",
+    "ItemRendererGlowMixin",
+    "KillBypassMixin"
   ],
   "injectors": {
     "defaultRequire": 1

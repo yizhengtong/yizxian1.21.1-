@@ -1,0 +1,171 @@
+{
+  "meta": {
+    "format_version": "4.10",
+    "creation_time": 1719264000,
+    "model_format": "java_block",
+    "box_uv": false
+  },
+  "name": "武器攻击动画",
+  "parent": "",
+  "model_identifier": "yizxianmod:weapon",
+  "visible_box": [2, 2, 2],
+  "variable_placeholders": "",
+  "variable_placeholder_buttons": [],
+  "timeline_setups": [],
+  "resolution": {"width": 64, "height": 64},
+  "elements": [
+    {
+      "name": "blade",
+      "type": "cube",
+      "from": [6, -2, 7],
+      "to": [10, 30, 9],
+      "rotation": {"angle": 0, "axis": "y", "origin": [8, 8, 8]},
+      "faces": {
+        "north": {"uv": [4, 4, 8, 36], "texture": 0},
+        "south": {"uv": [4, 4, 8, 36], "texture": 0},
+        "east":  {"uv": [6, 4, 8, 36], "texture": 0},
+        "west":  {"uv": [4, 4, 6, 36], "texture": 0},
+        "up":    {"uv": [6, 7, 10, 9], "texture": 0},
+        "down":  {"uv": [6, 7, 10, 9], "texture": 0}
+      },
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "name": "guard_left",
+      "type": "cube",
+      "from": [2, 28, 7],
+      "to": [14, 30, 9],
+      "rotation": {"angle": 0, "axis": "y", "origin": [8, 8, 8]},
+      "faces": {
+        "north": {"uv": [2, 36, 14, 38], "texture": 0},
+        "south": {"uv": [2, 36, 14, 38], "texture": 0},
+        "east":  {"uv": [12, 36, 14, 38], "texture": 0},
+        "west":  {"uv": [2, 36, 4, 38], "texture": 0},
+        "up":    {"uv": [2, 36, 14, 38], "texture": 0},
+        "down":  {"uv": [2, 36, 14, 38], "texture": 0}
+      },
+      "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    },
+    {
+      "name": "handle",
+      "type": "cube",
+      "from": [7, -10, 7.5],
+      "to": [9, -2, 8.5],
+      "rotation": {"angle": 0, "axis": "y", "origin": [8, 8, 8]},
+      "faces": {
+        "north": {"uv": [7, 38, 9, 46], "texture": 0},
+        "south": {"uv": [7, 38, 9, 46], "texture": 0},
+        "east":  {"uv": [7.5, 38, 8.5, 46], "texture": 0},
+        "west":  {"uv": [7.5, 38, 8.5, 46], "texture": 0},
+        "up":    {"uv": [7, 7, 9, 8.5], "texture": 0},
+        "down":  {"uv": [7, 7, 9, 8.5], "texture": 0}
+      },
+      "uuid": "c3d4e5f6-a7b8-9012-cdef-123456789012"
+    }
+  ],
+  "outliner": [
+    {
+      "name": "weapon",
+      "children": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890", "b2c3d4e5-f6a7-8901-bcde-f12345678901", "c3d4e5f6-a7b8-9012-cdef-123456789012"],
+      "uuid": "d4e5f6a7-b8c9-0123-defa-1234567890123",
+      "rotation": [0, 0, 0],
+      "origin": [8, 8, 8]
+    }
+  ],
+  "textures": [
+    {
+      "name": "terra_blade",
+      "id": "0",
+      "path": "D:\\ZM\\yizgzq\\yizxian1.21.1\\src\\main\\resources\\assets\\yizxianmod\\textures\\item\\terra_blade.png",
+      "uv_width": 64,
+      "uv_height": 64,
+      "render_mode": "default"
+    }
+  ],
+  "animations": [
+    {
+      "name": "attack_horizontal",
+      "loop": "false",
+      "override": false,
+      "length": 0.4,
+      "snapping": 24,
+      "selected_bones": {"weapon": true},
+      "animators": {
+        "weapon": {
+          "name": "weapon",
+          "type": "bone",
+          "keyframes": [
+            {"channel": "rotation", "data_points": [
+              {"x": 0, "y": 0, "z": -60},
+              {"x": 0, "y": 0, "z": -20},
+              {"x": 0, "y": 0, "z": 0},
+              {"x": 0, "y": 0, "z": 20},
+              {"x": 0, "y": 0, "z": 30}
+            ], "time": [0, 0.15, 0.25, 0.35, 0.4]},
+            {"channel": "position", "data_points": [
+              {"x": -3, "y": 0, "z": 0},
+              {"x": 0, "y": 0, "z": 0},
+              {"x": 3, "y": 0, "z": 0}
+            ], "time": [0, 0.25, 0.4]}
+          ]
+        }
+      }
+    },
+    {
+      "name": "attack_overhead",
+      "loop": "false",
+      "override": false,
+      "length": 0.4,
+      "snapping": 24,
+      "selected_bones": {"weapon": true},
+      "animators": {
+        "weapon": {
+          "name": "weapon",
+          "type": "bone",
+          "keyframes": [
+            {"channel": "rotation", "data_points": [
+              {"x": -70, "y": -25, "z": 0},
+              {"x": -40, "y": -10, "z": 0},
+              {"x": -15, "y": 0, "z": 0},
+              {"x": 10, "y": 10, "z": 0},
+              {"x": 20, "y": 15, "z": 0}
+            ], "time": [0, 0.15, 0.25, 0.35, 0.4]},
+            {"channel": "position", "data_points": [
+              {"x": 0, "y": 3, "z": 0},
+              {"x": 0, "y": 0, "z": 0},
+              {"x": 0, "y": -2, "z": 0}
+            ], "time": [0, 0.25, 0.4]}
+          ]
+        }
+      }
+    },
+    {
+      "name": "attack_diagonal",
+      "loop": "false",
+      "override": false,
+      "length": 0.4,
+      "snapping": 24,
+      "selected_bones": {"weapon": true},
+      "animators": {
+        "weapon": {
+          "name": "weapon",
+          "type": "bone",
+          "keyframes": [
+            {"channel": "rotation", "data_points": [
+              {"x": -20, "y": 0, "z": -40},
+              {"x": 0, "y": 0, "z": -10},
+              {"x": 10, "y": 0, "z": 15},
+              {"x": 25, "y": 0, "z": 35},
+              {"x": 30, "y": 0, "z": 50}
+            ], "time": [0, 0.15, 0.25, 0.35, 0.4]},
+            {"channel": "position", "data_points": [
+              {"x": -2, "y": -1.5, "z": 0},
+              {"x": 0, "y": 0, "z": 0},
+              {"x": 2, "y": 1.5, "z": 0}
+            ], "time": [0, 0.25, 0.4]}
+          ]
+        }
+      }
+    }
+  ]
+}

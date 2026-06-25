@@ -6,7 +6,6 @@ import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
@@ -22,7 +21,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
-import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
@@ -31,7 +29,6 @@ public final class TerraprismaRenderHandler {
     private static final Path CONFIG_PATH = Path.of("config", "yizxianmod", "terraprisma.json");
 
     private static final Map<UUID, BladeState[]> BLADES = new HashMap<>();
-    private static final Map<UUID, Long> NEXT_DISPATCH_TICK = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_CMD_TARGET = new HashMap<>();
     private static final Map<UUID, Long> CMD_TARGET_EXPIRE = new HashMap<>();
     private static final Set<UUID> DEAD_PLAYERS = new HashSet<>();
@@ -68,13 +65,10 @@ public final class TerraprismaRenderHandler {
     static int    ellipseDuration      = 14;
     static int    piercePrepTicks      = 6;
     static int    pierceAttackTicks    = 8;
-    static int    chaseStrikeTicks     = 7;
     static double pierceCircleRadius   = 5.0;
     static double pierceCircleY        = 3.0;
     static int    dispatchInterval     = 5;
     static int    maxAttackRounds      = 8;
-    static int    prepEngageTicks      = 10;
-    static int    retreatTicks         = 30;
 
     // ── 渲染偏移 ──
     static float renderScale    = 1.5f;
@@ -152,7 +146,6 @@ public final class TerraprismaRenderHandler {
         BladeMode mode = BladeMode.IDLE_WING;
         FlightPlan flightPlan;
         FlightPoint curNode = FlightPoint.Z;
-        FlightPoint prevNode = FlightPoint.Z;
         FlightPoint interpFrom = FlightPoint.Z;
         FlightPoint interpTo   = FlightPoint.Z;
         float interpT;
@@ -161,42 +154,29 @@ public final class TerraprismaRenderHandler {
         Vec3 velocity = Vec3.ZERO;
         float timeInMode;
         int roundCount;
-        int launchPhase;
-        boolean didFirstStrike;
         Vec3 memoPos = Vec3.ZERO;
-        Vec3 retreatStart;
-        Vec3 retreatCtrl;
-        Vec3 retreatHome;
         Map<UUID, Long> hitCooldowns = new HashMap<>();
-        /** 调试标签: A=翅膀, B=上升, C=俯冲, D=椭圆, E=穿刺, F=归巢, G=追击 */
+        /** 调试标签: A=翅膀, B=上升, C=俯冲, D=椭圆, E=穿刺, F=归巢 */
         String phaseLabel = "A";
-        /** 召唤来源等级 (1/2/3)，决定伤害系数 */
+        /** 召唤来源等级 (1..5)，决定伤害系数 */
         int sourceLevel = 1;
 
         BladeState(int index) { this.index = index; }
 
         void enterRising(UUID target, Vec3 from) {
             mode = BladeMode.RISING; timeInMode = 0; targetId = target;
-            worldPos = from; roundCount = 0; didFirstStrike = false;
-            launchPhase = 0; memoPos = Vec3.ZERO; flightPlan = null;
+            worldPos = from; roundCount = 0;
+            memoPos = Vec3.ZERO; flightPlan = null;
             curNode = new FlightPoint(from, 0, 0, 0);
-            retreatStart = null; retreatCtrl = null; retreatHome = null;
-            phaseLabel = "B";
-        }
-        void swapTarget(UUID newTarget) {
-            mode = BladeMode.RISING; timeInMode = 0; targetId = newTarget;
-            roundCount = 0; launchPhase = 1; memoPos = Vec3.ZERO; flightPlan = null;
-            retreatStart = null; retreatCtrl = null; retreatHome = null;
             phaseLabel = "B";
         }
         void executePlan(FlightPlan plan) {
             mode = BladeMode.ASSAULT; timeInMode = 0; flightPlan = plan;
-            curNode = FlightPoint.Z; prevNode = FlightPoint.Z;
+            curNode = FlightPoint.Z;
         }
         void returnHome() {
             mode = BladeMode.RETURNING; timeInMode = 0; targetId = null;
-            roundCount = 0; launchPhase = 0; flightPlan = null;
-            retreatStart = worldPos;
+            roundCount = 0; flightPlan = null;
             phaseLabel = "F";
         }
         // 轨迹姿态提取
@@ -337,22 +317,6 @@ public final class TerraprismaRenderHandler {
         blade.executePlan(new FlightPlan(steps));
     }
 
-    private static void planChaseStrike(BladeState blade, LivingEntity target) {
-        Vec3 endPos = target.getBoundingBox().getCenter();
-        int dur = chaseStrikeTicks;
-        Vec3 curUp = blade.bladeUp();
-        List<FlightPoint> steps = new ArrayList<>();
-        OrbitCurve el = new OrbitCurve(endPos, blade.worldPos, curUp, 0.25f);
-        for (int i = 1; i <= dur; i++) {
-            float p = (float) i / dur;
-            Vec3 ep = el.pointAt(p * 0.5f);
-            Vec3 td = ep.subtract(el.center()).normalize();
-            steps.add(resolveRotation(ep, td, curUp));
-        }
-        blade.phaseLabel = "G";
-        blade.executePlan(new FlightPlan(steps));
-    }
-
     private static void applyPosCorrection(BladeState blade, LivingEntity target) {
         Vec3 curCenter = target.getBoundingBox().getCenter();
         // 首次调用 memoPos=ZERO → 只记录位置，不偏移（否则整条轨迹被 shift 到万里之外）
@@ -465,7 +429,6 @@ public final class TerraprismaRenderHandler {
         Set<UUID> alive = new HashSet<>();
         for (Player p : players) alive.add(p.getUUID());
         BLADES.keySet().retainAll(alive);
-        NEXT_DISPATCH_TICK.keySet().retainAll(alive);
 
         for (Player player : players) {
             // 玩家死亡复活 → 重置所有剑状态和目标
@@ -473,7 +436,6 @@ public final class TerraprismaRenderHandler {
             if (!player.isAlive()) { DEAD_PLAYERS.add(puid); continue; }
             if (DEAD_PLAYERS.remove(puid)) {
                 BLADES.remove(puid);
-                NEXT_DISPATCH_TICK.remove(puid);
                 PLAYER_CMD_TARGET.remove(puid);
                 CMD_TARGET_EXPIRE.clear();
             }
@@ -654,7 +616,6 @@ public final class TerraprismaRenderHandler {
                 }
             }
             // 批量出剑
-            long last = NEXT_DISPATCH_TICK.getOrDefault(player.getUUID(), -999L);
             int dispatched = 0;
             for (int i = 0; i < ids.length && dispatched < total / 10 + 6; i++) {
                 int need = pickNeed(quota, assigned);
@@ -668,7 +629,7 @@ public final class TerraprismaRenderHandler {
                     }
                 }
             }
-            if (dispatched > 0) NEXT_DISPATCH_TICK.put(player.getUUID(), gameTime);
+            // dispatch tracking removed (dead map)
         }
 
         float dt = Minecraft.getInstance().getTimer().getRealtimeDeltaTicks();
@@ -915,22 +876,12 @@ public final class TerraprismaRenderHandler {
         ps.pushPose();
         ps.translate(-0.5f, -0.5f, -0.5f);
 
-        float off = 0.02f; // 暂时放大便于观察
+        float off = 0.006f;
         var dirs = net.minecraft.client.yiz.xian.render.glow.GlowEdgeBakedModel.getDirections(true);
         var edgeRt = net.minecraft.client.yiz.xian.render.glow.OutlineRenderType.GLOW_EDGE;
 
         if (buf instanceof MultiBufferSource.BufferSource bs) bs.endBatch();
         var vc = buf.getBuffer(edgeRt);
-
-        // 调试：按 sourceLevel 映射调试色
-        float[] dbg = switch (sourceLevel) {
-            case 1 -> new float[]{1,0,0,1}; // 红
-            case 2 -> new float[]{0,1,0,1}; // 绿
-            case 3 -> new float[]{0,0,1,1}; // 蓝
-            case 4 -> new float[]{1,0,1,1}; // 紫
-            default -> new float[]{1,1,0,1}; // 黄
-        };
-        shader.safeGetUniform("uColor").set(dbg[0], dbg[1], dbg[2], dbg[3]);
 
         for (var dir : dirs) {
             ps.pushPose();
@@ -940,7 +891,7 @@ public final class TerraprismaRenderHandler {
                         net.minecraft.util.RandomSource.create(),
                         net.neoforged.neoforge.client.model.data.ModelData.EMPTY, null)) {
                     vc.putBulkData(ps.last(), quad,
-                        dbg[0], dbg[1], dbg[2], dbg[3],
+                        tint.x, tint.y, tint.z, tint.w,
                         15728880, OverlayTexture.NO_OVERLAY, true);
                 }
             }

@@ -1,0 +1,170 @@
+{
+  "meta": {
+    "format_version": "4.10",
+    "creation_time": 1719200000,
+    "model_format": "modded_entity",
+    "box_uv": false
+  },
+  "name": "泰拉刃攻击动画 — Terra Blade Attacks",
+  "parent": "",
+  "outliner": [
+    {
+      "name": "camera_root",
+      "origin": [0, 24, 0],
+      "rotation": [0, 0, 0],
+      "uuid": "a1b2c3d4-e5f6-4a00-a000-000000000001",
+      "locked": true,
+      "children": [
+        {
+          "name": "body",
+          "origin": [0, 24, 0],
+          "rotation": [0, 0, 0],
+          "uuid": "b2c3d4e5-f6a1-4b00-b000-000000000002",
+          "comment": "上半身 — 躯干扭转",
+          "children": [
+            {
+              "name": "right_shoulder",
+              "origin": [-5, 24, 0],
+              "rotation": [0, 0, 0],
+              "uuid": "c3d4e5f6-a1b2-4c00-c000-000000000003",
+              "comment": "右肩",
+              "children": [
+                {
+                  "name": "right_arm",
+                  "origin": [-5, 24, 0],
+                  "rotation": [0, 0, 0],
+                  "uuid": "d4e5f6a1-b2c3-4d00-d000-000000000004",
+                  "comment": "整条手臂 ★ 主挥砍旋转",
+                  "children": [
+                    {
+                      "name": "right_hand",
+                      "origin": [-5, 0, 0],
+                      "rotation": [0, 0, 0],
+                      "uuid": "f6a1b2c3-d4e5-4f00-f000-000000000006",
+                      "comment": "右手 — 握剑点",
+                      "children": [
+                        {
+                          "name": "blade_handle",
+                          "origin": [0, -3, 0],
+                          "rotation": [0, 0, 45],
+                          "uuid": "10000000-0000-4000-a000-000000000010",
+                          "comment": "剑柄 ★ 整剑旋转支点 — 包含握柄+护手",
+                          "children": [
+                            {
+                              "name": "blade_body",
+                              "origin": [0, 2, 0],
+                              "rotation": [0, 0, 0],
+                              "uuid": "10000000-0000-4000-a000-000000000011",
+                              "comment": "剑身 ★ 护手上方2px处 — 刀身弯曲支点",
+                              "children": [
+                                {
+                                  "name": "blade_tip",
+                                  "origin": [0, 12, 0],
+                                  "rotation": [0, 0, 0],
+                                  "uuid": "10000000-0000-4000-a000-000000000012",
+                                  "comment": "剑尖 ★ 刀尖 — 可额外弯曲做甩剑效果",
+                                  "locked": true
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "name": "arm_vis",
+      "type": "cube",
+      "from": [-5.5, 24, -1.5],
+      "to": [-4.5, 0, 1.5],
+      "origin": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "color": 8,
+      "uuid": "20000000-0000-4000-b000-00000000000c"
+    },
+    {
+      "name": "handle_grip",
+      "type": "cube",
+      "from": [-0.4, -6, -0.4],
+      "to": [0.4, 0, 0.4],
+      "origin": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "color": 1,
+      "uuid": "20000000-0000-4000-b000-00000000000b"
+    },
+    {
+      "name": "guard",
+      "type": "cube",
+      "from": [-2, 0, -0.5],
+      "to": [2, 1.5, 0.5],
+      "origin": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "color": 11,
+      "uuid": "20000000-0000-4000-b000-000000000008"
+    },
+    {
+      "name": "blade_flat",
+      "type": "cube",
+      "from": [-0.5, 2, -0.2],
+      "to": [0.5, 12, 0.2],
+      "origin": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "color": 13,
+      "uuid": "20000000-0000-4000-b000-000000000009"
+    },
+    {
+      "name": "tip_wedge",
+      "type": "cube",
+      "from": [-0.4, 12, -0.18],
+      "to": [0.4, 15, 0.18],
+      "origin": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "color": 14,
+      "uuid": "20000000-0000-4000-b000-00000000000a"
+    }
+  ],
+  "animations": [
+    {
+      "name": "horizontal_sweep",
+      "loop": "once",
+      "override": false,
+      "length": 0.6,
+      "snapping": 10,
+      "selected": true,
+      "animators": {}
+    },
+    {
+      "name": "vertical_chop",
+      "loop": "once",
+      "override": false,
+      "length": 0.6,
+      "snapping": 10,
+      "animators": {}
+    },
+    {
+      "name": "diagonal_slash",
+      "loop": "once",
+      "override": false,
+      "length": 0.6,
+      "snapping": 10,
+      "animators": {}
+    },
+    {
+      "name": "idle",
+      "loop": "hold",
+      "override": false,
+      "length": 0.1,
+      "snapping": 10,
+      "animators": {}
+    }
+  ]
+}
