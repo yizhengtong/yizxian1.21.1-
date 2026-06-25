@@ -38,12 +38,11 @@ public abstract class TerraBladeFirstPersonMixin {
         ci.cancel();
         ItemInHandRenderer self = (ItemInHandRenderer) (Object) this;
 
-        float swing = player.getAttackAnim(pt);          // 0→1 攻击进度
         int animIdx = ComboStateMachine.getCurrentAnimIndex(player);
 
         ps.pushPose();
         ps.translate(0.56F, -0.52F, -0.72F);             // 原版基础右手位
-        FirstPersonSwordRenderer.applyTransform(ps, animIdx, swing);
+        FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
         self.renderItem(player, main,
             ItemDisplayContext.NONE, false, ps, buf, light);
         ps.popPose();

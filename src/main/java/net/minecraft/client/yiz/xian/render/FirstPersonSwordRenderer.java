@@ -41,21 +41,40 @@ public final class FirstPersonSwordRenderer {
 
     private static final float[] BUF = new float[9];
 
+    /** 攻击动画总时长（秒），包含出刀 + 收刀 */
+    private static final float SWING_DURATION = 1.2f;
+
+    /** swing 计时：攻击开始时刻（系统毫秒），0 表示无攻击 */
+    private static long swingStartMs = 0;
+
     /**
      * 在已 translate 到基础右手位后调用，应用插值后的 firstperson_righthand 变换。
      *
-     * <p>getAttackAnim 返回 0→1→0 曲线：
-     * 上升段播放向前挥砍（KF1→KF4），下降段自然倒播作为收刀动画（KF4→KF1）。
+     * <p>用自定义 1.2 秒 swing timer 替代原版 getAttackAnim：
+     * 0→0.6s 出刀（KF1→KF4），0.6→1.2s 收刀（KF4→KF1）。
      *
      * @param ps       PoseStack（已 translate(0.56,-0.52,-0.72)）
      * @param animIdx  动画索引 0~3
-     * @param swing    getAttackAnim 返回值
+     * @param player   本地玩家（用于检测 swinging 状态）
      */
-    public static void applyTransform(PoseStack ps, int animIdx, float swing) {
+    public static void applyTransform(PoseStack ps, int animIdx, net.minecraft.client.player.LocalPlayer player) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
-        // swing 为 0 时纯待机，>0 时走关键帧（上升=挥砍，下降=收刀）
-        if (swing <= 0f) {
+        // 检测攻击开始 / 结束
+        long now = System.currentTimeMillis();
+        if (player.swinging && swingStartMs == 0) {
+            swingStartMs = now;                    // 攻击开始，记录时间
+        }
+        if (!player.swinging) {
+            swingStartMs = 0;                      // 攻击结束，重置
+        }
+
+        // 计算 swing 进度 0→1（over 1.2s），再映射为 sin 曲线 0→1→0
+        float elapsed = (now - swingStartMs) / 1000f;
+        float t = elapsed / SWING_DURATION;         // 0→1 线性
+        float swing = (float) Math.sin(t * Math.PI); // 0→1→0 曲线
+
+        if (swing <= 0f || swingStartMs == 0) {
             applyIdle(ps);
             return;
         }
