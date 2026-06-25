@@ -38,12 +38,12 @@ public abstract class TerraBladeThirdPersonMixin {
         PoseStack ps, MultiBufferSource buf, int light
     );
 
-    /** 与 FirstPersonSwordRenderer.ANIM_A 完全相同的关键帧数据 */
+    /** 第三人称关键帧（来自用户 1~4.bbmodel 的 thirdperson_lefthand）。 */
     private static final float[][] KF = {
-        {-52, -69, 180, -22.87f, -1.30f,  -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},
-        {-66,  -1, 108, -33.75f,  4.45f, -16.00f, 1.70f, 1.70f, 0.44f, 0.35f},
-        {-82,  -1,  50,  -8.75f,  9.20f, -17.50f, 1.70f, 1.70f, 0.44f, 0.65f},
-        {-66,  -1,   1,  20.13f,  4.45f, -16.00f, 1.70f, 1.77f, 0.44f, 1.00f},
+        {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
+        {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
+        { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
+        { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
     };
     private static final float[] BUF = new float[9];
     private static long swingStartMs = 0;
