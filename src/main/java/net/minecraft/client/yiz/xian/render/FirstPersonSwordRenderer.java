@@ -25,7 +25,7 @@ public final class FirstPersonSwordRenderer {
 
     /** 待机姿态（模型自带 firstperson_righthand）。 */
     private static final float[] IDLE =
-        {-81, -98, -157, -17.12f, 2.95f, 1.38f, 1, 1, 0.44f, 0f};
+        {-52, -69, -180, -22.87f, -1.3f, -1.12f, 1, 1, 0.44f, 0f};
 
     /** 动画 A：左→右平砍（来自用户 1~4.bbmodel）。
      *  swing 上升时播放 KF1→KF4 向前挥砍，下降时倒播 KF4→KF1 作为收刀。 */
