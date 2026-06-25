@@ -41,8 +41,8 @@ public final class FirstPersonSwordRenderer {
 
     private static final float[] BUF = new float[9];
 
-    /** 攻击动画总时长（秒），包含出刀 + 收刀 */
-    private static final float SWING_DURATION = 1.2f;
+    /** 攻击动画总时长（秒），与 WeaponAnimMixin.WEAPON_COOLDOWN_TICKS(24) 一致 */
+    private static final float SWING_DURATION = 1.2f; // 24 ticks / 20 tps
 
     /** swing 计时：攻击开始时刻（系统毫秒），0 表示无攻击 */
     private static long swingStartMs = 0;
