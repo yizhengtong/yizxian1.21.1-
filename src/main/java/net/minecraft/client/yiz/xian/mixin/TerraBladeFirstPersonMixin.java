@@ -40,7 +40,7 @@ public abstract class TerraBladeFirstPersonMixin {
         if (m) renderWeapon(ps, buf, player, light, self, main, animIdx);
         if (o) renderWeapon(ps, buf, player, light, self, off,  animIdx);
 
-        // 非武器手：保留原版渲染，不消失
+        // 非武器手：保留原版渲染（主手 RIGHT，副手 LEFT）
         if (!m && !main.isEmpty()) {
             ps.pushPose();
             ps.translate(0.56F, -0.52F, -0.72F);
@@ -49,8 +49,8 @@ public abstract class TerraBladeFirstPersonMixin {
         }
         if (!o && !off.isEmpty()) {
             ps.pushPose();
-            ps.translate(0.56F, -0.52F, -0.72F);
-            self.renderItem(player, off, ItemDisplayContext.FIRST_PERSON_RIGHT_HAND, false, ps, buf, light);
+            ps.translate(-0.56F, -0.52F, -0.72F);
+            self.renderItem(player, off, ItemDisplayContext.FIRST_PERSON_LEFT_HAND, false, ps, buf, light);
             ps.popPose();
         }
     }
