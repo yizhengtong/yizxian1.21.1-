@@ -27,13 +27,13 @@ public abstract class WeaponAnimMixin {
     public static final int WEAPON_COOLDOWN_TICKS = 24;
 
     @Shadow public int attackStrengthTicker;
-    @Shadow public abstract ItemStack getMainHandItem();
 
     // ── 1. 强行焊死冷却时长 ──
 
     @Inject(method = "getCurrentItemAttackStrengthDelay", at = @At("HEAD"), cancellable = true)
     private void yizxian_forceCooldown(CallbackInfoReturnable<Integer> cir) {
-        if (getMainHandItem().getItem() instanceof ILeftHandRender) {
+        Player self = (Player) (Object) this;
+        if (self.getMainHandItem().getItem() instanceof ILeftHandRender) {
             cir.setReturnValue(WEAPON_COOLDOWN_TICKS);
         }
     }
@@ -42,7 +42,8 @@ public abstract class WeaponAnimMixin {
 
     @Inject(method = "getAttackStrengthScale", at = @At("HEAD"), cancellable = true)
     private void yizxian_binaryCooldown(float adjustTicks, CallbackInfoReturnable<Float> cir) {
-        if (!(getMainHandItem().getItem() instanceof ILeftHandRender)) return;
+        Player self = (Player) (Object) this;
+        if (!(self.getMainHandItem().getItem() instanceof ILeftHandRender)) return;
         int delay = WEAPON_COOLDOWN_TICKS;
         if (delay <= 0) { cir.setReturnValue(1.0f); return; }
         float raw = (attackStrengthTicker + adjustTicks) / (float) delay;
