@@ -46,6 +46,7 @@ public abstract class TerraBladeThirdPersonMixin {
 
     private static final float[] BUF = new float[9];
     private static long swingStartMs = 0;
+    private static boolean wasAttacking = false; // 滞后防抖
 
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
     private void yizxian_tp(
@@ -56,35 +57,41 @@ public abstract class TerraBladeThirdPersonMixin {
         if (arm == HumanoidArm.LEFT) return;
         ci.cancel();
 
-        // ── 计算攻击进度 ──
+        // ── 攻击进度 ──
         boolean attacking = false;
-        float swing = 0f;
         if (entity instanceof Player player && player.swinging) {
             long now = System.currentTimeMillis();
             if (swingStartMs == 0) swingStartMs = now;
             float cd = player.getCurrentItemAttackStrengthDelay();
             if (cd <= 0f) cd = 20f;
+            float duration = cd / 20f;
             float elapsed = (now - swingStartMs) / 1000f;
-            if (elapsed < cd / 20f) {
-                swing = (float) Math.sin((elapsed / (cd / 20f)) * Math.PI);
-                if (swing > 0f) {
+            if (elapsed < duration) {
+                float s = (float) Math.sin((elapsed / duration) * Math.PI);
+                // 滞后阈值：进>0.05, 出<0.01 防鬼畜
+                if (!wasAttacking && s > 0.05f) wasAttacking = true;
+                if (wasAttacking && s < 0.01f) wasAttacking = false;
+                if (wasAttacking) {
                     attacking = true;
                     int idx = ComboStateMachine.getCurrentAnimIndex(player);
                     if (idx < 0) idx = 0;
-                    interpolate(KF_TP, swing, BUF);
+                    interpolate(KF_TP, s, BUF);
                     ANIM_BUF.set(BUF);
                     IS_ATTACKING.set(true);
                 }
             } else {
                 swingStartMs = 0;
+                wasAttacking = false;
             }
+        } else {
+            swingStartMs = 0;
+            wasAttacking = false;
         }
 
         invokeRenderArmWithItem(entity, stack,
             ItemDisplayContext.THIRD_PERSON_LEFT_HAND, HumanoidArm.LEFT,
             ps, buf, light);
 
-        // 清理
         if (attacking) {
             IS_ATTACKING.set(false);
             ANIM_BUF.remove();
