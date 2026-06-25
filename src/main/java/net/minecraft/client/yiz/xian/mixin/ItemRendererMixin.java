@@ -2,33 +2,21 @@ package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.client.yiz.xian.item.TerraBladeItem;
+import net.minecraft.client.yiz.xian.api.BlockbenchAnimParser;
+import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
+import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 对 TerraBladeItem 强制重映射 ItemDisplayContext + leftHand：
- *
- * <pre>
- * 第一人称 LEFT  → RIGHT + leftHand=false (永远右手展示，不镜像)
- * 第三人称 RIGHT → LEFT  + leftHand=true  (永远左手拔刀姿势)
- * </pre>
- *
- * <p>仅重映射 displayContext 不够——NeoForge 的
- * {@code ClientHooks.handleCameraTransforms} 同时依赖 leftHand 做镜像，
- * 必须一并修改。</p>
- *
- * <h3>注意：此类未在 mixins.json 中注册</h3>
- * <p>此 Mixin 为可选的展示逻辑（纯视觉效果），当前阶段默认不启用。
- * 如需启用左手/右手姿势重映射，取消此类的 {@code @Mixin} 注解并将
- * {@code "ItemRendererMixin"} 添加到 {@code yizxianmod.mixins.json}
- * 的 {@code "mixins"} 数组中即可。</p>
+ * 物品渲染拦截：第三人称攻击时替换 display transform 为 ThreadLocal 关键帧。
+ * 第一人称 LEFT → RIGHT 重映射保留兼容。
  */
 @Mixin(ItemRenderer.class)
 public abstract class ItemRendererMixin {
@@ -42,30 +30,45 @@ public abstract class ItemRendererMixin {
     )
     private void yizxian_remapContext(
             ItemStack stack, ItemDisplayContext context, boolean leftHand,
-            PoseStack poseStack, MultiBufferSource bufferSource,
-            int combinedLight, int combinedOverlay, BakedModel model,
+            PoseStack ps, MultiBufferSource buf,
+            int light, int overlay, BakedModel model,
             CallbackInfo ci
     ) {
-        if (!(stack.getItem() instanceof TerraBladeItem)) return;
+        if (!(stack.getItem() instanceof ILeftHandRender)) return;
 
-        ItemDisplayContext remappedCtx = context;
-        boolean remappedLeft = leftHand;
-
-        if (context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND) {
-            remappedCtx = ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
-            remappedLeft = false; // 关闭左手镜像
-        } else if (context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND) {
-            remappedCtx = ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
-            remappedLeft = true; // 使用左手姿势
+        // ── 第三人称攻击动画：ThreadLocal 传来的关键帧 ──
+        if (context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                && TerraBladeThirdPersonMixin.IS_ATTACKING.get()) {
+            float[] kf = TerraBladeThirdPersonMixin.ANIM_BUF.get();
+            if (kf != null) {
+                ci.cancel();
+                ps.pushPose();
+                ps.translate(kf[3] / 16f, kf[4] / 16f, kf[5] / 16f);
+                ps.mulPose(new Quaternionf().rotationXYZ(
+                    (float)Math.toRadians(kf[0]), (float)Math.toRadians(kf[1]), (float)Math.toRadians(kf[2])));
+                ps.scale(kf[6], kf[7], kf[8]);
+                ps.mulPose(new Quaternionf()
+                    .rotateZ((float)Math.toRadians(BlockbenchAnimParser.elemRotZ))
+                    .rotateY((float)Math.toRadians(BlockbenchAnimParser.elemRotY))
+                    .rotateX((float)Math.toRadians(BlockbenchAnimParser.elemRotX)));
+                ((ItemRenderer)(Object)this).renderStatic(stack, ItemDisplayContext.NONE,
+                    light, overlay, ps, buf, net.minecraft.client.Minecraft.getInstance().level, 0);
+                ps.popPose();
+                return;
+            }
         }
 
-        if (remappedCtx != context) {
+        // ── 第一/三人称左右手重映射（兼容）──
+        if (context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND) {
             ci.cancel();
-            ((ItemRenderer) (Object) this).render(
-                stack, remappedCtx, remappedLeft,
-                poseStack, bufferSource,
-                combinedLight, combinedOverlay, model
-            );
+            ((ItemRenderer)(Object)this).render(
+                stack, ItemDisplayContext.FIRST_PERSON_RIGHT_HAND, false,
+                ps, buf, light, overlay, model);
+        } else if (context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND) {
+            ci.cancel();
+            ((ItemRenderer)(Object)this).render(
+                stack, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, true,
+                ps, buf, light, overlay, model);
         }
     }
 }

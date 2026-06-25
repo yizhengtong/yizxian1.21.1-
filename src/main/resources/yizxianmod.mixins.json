@@ -9,6 +9,7 @@
     "WeaponAnimMixin",
     "TerraBladeFirstPersonMixin",
     "TerraBladeThirdPersonMixin",
+    "ItemRendererMixin",
     "ItemRendererGlowMixin",
     "KillBypassMixin",
     "AutoAttackMixin"
