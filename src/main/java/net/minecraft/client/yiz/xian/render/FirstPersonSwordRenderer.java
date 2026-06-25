@@ -60,24 +60,23 @@ public final class FirstPersonSwordRenderer {
     public static void applyTransform(PoseStack ps, int animIdx, net.minecraft.client.player.LocalPlayer player) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
-        // 检测攻击开始 / 结束
         long now = System.currentTimeMillis();
+        // 仅在攻击开始时记录时间，timer 自己跑完 1.2s，不随 swinging 清零
         if (player.swinging && swingStartMs == 0) {
-            swingStartMs = now;                    // 攻击开始，记录时间
-        }
-        if (!player.swinging) {
-            swingStartMs = 0;                      // 攻击结束，重置
+            swingStartMs = now;
         }
 
-        // 计算 swing 进度 0→1（over 1.2s），再映射为 sin 曲线 0→1→0
         float elapsed = (now - swingStartMs) / 1000f;
-        float t = elapsed / SWING_DURATION;         // 0→1 线性
-        float swing = (float) Math.sin(t * Math.PI); // 0→1→0 曲线
-
-        if (swing <= 0f || swingStartMs == 0) {
+        // 超过 1.2s 则重置 timer，回到待机
+        if (elapsed >= SWING_DURATION) {
+            swingStartMs = 0;
             applyIdle(ps);
             return;
         }
+
+        // 0→1 线性进度 → sin 曲线 0→1→0
+        float t = elapsed / SWING_DURATION;
+        float swing = (float) Math.sin(t * Math.PI);
 
         interpolate(ANIMS[animIdx], swing, BUF);
 
