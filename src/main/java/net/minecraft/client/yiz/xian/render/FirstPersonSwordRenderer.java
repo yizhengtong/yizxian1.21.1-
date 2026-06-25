@@ -27,8 +27,8 @@ public final class FirstPersonSwordRenderer {
     private static final float[] IDLE =
         {-81, -98, -157, -17.12f, 2.95f, 1.38f, 1, 1, 0.44f, 0f};
 
-    /** 动画 A：左→右平砍。向前的挥砍关键帧（用户 1~4.bbmodel），不含回程。
-     *  swingProgress 下降阶段直接切回待机，不播放反向关键帧。 */
+    /** 动画 A：左→右平砍（来自用户 1~4.bbmodel）。
+     *  swing 上升时播放 KF1→KF4 向前挥砍，下降时倒播 KF4→KF1 作为收刀。 */
     private static final float[][] ANIM_A = {
         {-52, -69, 180, -22.87f, -1.30f,  -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},  // KF1
         {-66,  -1, 108, -33.75f,  4.45f, -16.00f, 1.70f, 1.70f, 0.44f, 0.35f},  // KF2
@@ -41,30 +41,26 @@ public final class FirstPersonSwordRenderer {
 
     private static final float[] BUF = new float[9];
 
-    /** 上一帧的 swingProgress，用于检测攻击回落阶段 */
-    private static float prevSwing = 0f;
-
     /**
      * 在已 translate 到基础右手位后调用，应用插值后的 firstperson_righthand 变换。
      *
+     * <p>getAttackAnim 返回 0→1→0 曲线：
+     * 上升段播放向前挥砍（KF1→KF4），下降段自然倒播作为收刀动画（KF4→KF1）。
+     *
      * @param ps       PoseStack（已 translate(0.56,-0.52,-0.72)）
      * @param animIdx  动画索引 0~3
-     * @param swing    getAttackAnim 返回值（0→1→0 曲线）
+     * @param swing    getAttackAnim 返回值
      */
     public static void applyTransform(PoseStack ps, int animIdx, float swing) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
-        // 攻击回落阶段（swing 下降）不播放反向关键帧，直接切回待机
-        if (swing <= 0.02f) {
-            prevSwing = 0f;
+        // swing 为 0 时纯待机，>0 时走关键帧（上升=挥砍，下降=收刀）
+        if (swing <= 0f) {
             applyIdle(ps);
             return;
         }
 
-        // 只播放向前的挥砍（swing 0→1 阶段），下降阶段停留在 KF4
-        float t = Mth.clamp(swing, 0f, 1f);
-        interpolate(ANIMS[animIdx], t, BUF);
-        prevSwing = swing;
+        interpolate(ANIMS[animIdx], swing, BUF);
 
         ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
         ps.mulPose(new Quaternionf().rotationXYZ(
