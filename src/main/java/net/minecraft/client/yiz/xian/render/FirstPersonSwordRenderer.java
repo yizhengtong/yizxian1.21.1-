@@ -57,7 +57,7 @@ public final class FirstPersonSwordRenderer {
      * @param animIdx  动画索引 0~3
      * @param player   本地玩家（用于检测 swinging 和读攻速）
      */
-    public static void applyTransform(PoseStack ps, int animIdx, net.minecraft.client.player.LocalPlayer player) {
+    public static void applyTransform(PoseStack ps, int animIdx, net.minecraft.client.player.LocalPlayer player, net.minecraft.world.item.ItemStack stack) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
         long now = System.currentTimeMillis();
@@ -65,8 +65,8 @@ public final class FirstPersonSwordRenderer {
             swingStartMs = now;
         }
 
-        // 动画时长（秒）= 冷却 tick / 20 * 倍率
-        float cooldownTicks = player.getCurrentItemAttackStrengthDelay();
+        // 动画时长从武器自身的攻速推算（不依赖主手）
+        float cooldownTicks = getCooldownTicks(stack);
         if (cooldownTicks <= 0f) cooldownTicks = 20f;
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
@@ -88,6 +88,15 @@ public final class FirstPersonSwordRenderer {
             (float) Math.toRadians(BUF[1]),
             (float) Math.toRadians(BUF[2])));
         ps.scale(BUF[6], BUF[7], BUF[8]);
+    }
+
+    /** 从 ItemStack 的攻速属性推算冷却 tick 数 */
+    private static float getCooldownTicks(net.minecraft.world.item.ItemStack stack) {
+        if (stack.getItem() instanceof net.minecraft.client.yiz.xian.item.MeleeWeaponItem mw) {
+            double speed = mw.getAttackSpeed();
+            if (speed > 0) return (float)(20.0 / speed);
+        }
+        return 20f; // 默认 1.0s
     }
 
     private static void applyIdle(PoseStack ps) {

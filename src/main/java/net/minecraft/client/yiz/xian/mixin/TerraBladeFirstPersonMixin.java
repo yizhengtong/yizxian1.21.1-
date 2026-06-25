@@ -15,14 +15,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 第一人称：检测 ILeftHandRender，用关键帧动画渲染主手武器。
- * <p>
- * 渲染方式复刻原版：基础右手位 translate(0.56,-0.52,-0.72)
- * → {@link FirstPersonSwordRenderer} 插值后的 firstperson_righthand 变换
- * → 物品几何（NONE 上下文，不再叠加 display 变换）。
- * <p>
- * 关键帧由用户在 Blockbench 中用 firstperson_righthand display transform 摆出，
- * 攻击进度 {@code getAttackAnim} 驱动 1→2→3→4 关键帧插值。
+ * 第一人称：ILeftHandRender 武器统一走右手管线 + 关键帧动画。
+ * 非武器物品保留原版渲染，保证兼容。
  */
 @Mixin(ItemInHandRenderer.class)
 public abstract class TerraBladeFirstPersonMixin {
@@ -42,20 +36,32 @@ public abstract class TerraBladeFirstPersonMixin {
         ItemInHandRenderer self = (ItemInHandRenderer) (Object) this;
         int animIdx = ComboStateMachine.getCurrentAnimIndex(player);
 
-        // 主手和副手统一用 firstperson_righthand 参数渲染
-        if (m) {
+        // 武器手（有 ILeftHandRender 的手）：关键帧动画
+        if (m) renderWeapon(ps, buf, player, light, self, main, animIdx);
+        if (o) renderWeapon(ps, buf, player, light, self, off,  animIdx);
+
+        // 非武器手：保留原版渲染，不消失
+        if (!m && !main.isEmpty()) {
             ps.pushPose();
             ps.translate(0.56F, -0.52F, -0.72F);
-            FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
-            self.renderItem(player, main, ItemDisplayContext.NONE, false, ps, buf, light);
+            self.renderItem(player, main, ItemDisplayContext.FIRST_PERSON_RIGHT_HAND, false, ps, buf, light);
             ps.popPose();
         }
-        if (o) {
+        if (!o && !off.isEmpty()) {
             ps.pushPose();
             ps.translate(0.56F, -0.52F, -0.72F);
-            FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
-            self.renderItem(player, off, ItemDisplayContext.NONE, false, ps, buf, light);
+            self.renderItem(player, off, ItemDisplayContext.FIRST_PERSON_RIGHT_HAND, false, ps, buf, light);
             ps.popPose();
         }
+    }
+
+    private static void renderWeapon(PoseStack ps, MultiBufferSource.BufferSource buf,
+                                     LocalPlayer player, int light, ItemInHandRenderer self,
+                                     ItemStack stack, int animIdx) {
+        ps.pushPose();
+        ps.translate(0.56F, -0.52F, -0.72F);
+        FirstPersonSwordRenderer.applyTransform(ps, animIdx, player, stack);
+        self.renderItem(player, stack, ItemDisplayContext.NONE, false, ps, buf, light);
+        ps.popPose();
     }
 }
