@@ -23,6 +23,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class TerraprismaRenderHandler {
 
@@ -958,8 +959,8 @@ public final class TerraprismaRenderHandler {
     }
 
     // ═══ 禁疗系统 ═══
-    private static final Map<UUID, Long> ANTI_HEAL_EXPIRE = new HashMap<>();
-    private static final Map<UUID, Integer> ANTI_HEAL_CAP = new HashMap<>();
+    private static final Map<UUID, Long> ANTI_HEAL_EXPIRE = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> ANTI_HEAL_CAP = new ConcurrentHashMap<>();
 
     private static void applyAntiHeal(UUID targetId, int addSec, int capSec) {
         long now = System.currentTimeMillis();

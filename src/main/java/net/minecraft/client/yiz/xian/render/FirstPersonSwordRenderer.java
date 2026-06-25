@@ -23,39 +23,64 @@ public final class FirstPersonSwordRenderer {
     //   待机姿态 = 模型自带 firstperson_righthand [-81,-98,-157] [-17.12,2.95,1.38]，
     //   作为动画首尾帧：静止显示待机，攻击时 待机→KF1→…→KF4→待机。
 
-    /** 动画 A：左→右平砍（KF1~4 来自用户 1~4.bbmodel，首尾为待机帧）。 */
+    /** 待机姿态（模型自带 firstperson_righthand）。 */
+    private static final float[] IDLE =
+        {-81, -98, -157, -17.12f, 2.95f, 1.38f, 1, 1, 0.44f, 0f};
+
+    /** 动画 A：左→右平砍。向前的挥砍关键帧（用户 1~4.bbmodel），不含回程。
+     *  swingProgress 下降阶段直接切回待机，不播放反向关键帧。 */
     private static final float[][] ANIM_A = {
-        {-81, -98, -157, -17.12f, 2.95f,   1.38f,  1, 1, 0.44f, 0.00f},  // 待机
-        {-66, -34,  160, -19.87f, 2.45f,  -2.37f,  1, 1, 0.44f, 0.14f},  // KF1 拔刀起手
-        {-66,  -1,   64, -19.87f, 4.45f, -10.37f,  1, 1, 0.44f, 0.38f},  // KF2
-        {-66,  -1,   50, -11.12f, 4.45f, -15.37f,  1, 1, 0.44f, 0.60f},  // KF3
-        {-66,  -1,   12,   6.63f, 4.45f, -10.37f,  1, 1, 0.44f, 0.82f},  // KF4 收尾
-        {-81, -98, -157, -17.12f, 2.95f,   1.38f,  1, 1, 0.44f, 1.00f},  // 回待机
+        {-66, -34,  160, -19.87f, 2.45f,  -2.37f,  1, 1, 0.44f, 0.00f},  // KF1 拔刀起手
+        {-66,  -1,   64, -19.87f, 4.45f, -10.37f,  1, 1, 0.44f, 0.35f},  // KF2
+        {-66,  -1,   50, -11.12f, 4.45f, -15.37f,  1, 1, 0.44f, 0.65f},  // KF3
+        {-66,  -1,   12,   6.63f, 4.45f, -10.37f,  1, 1, 0.44f, 1.00f},  // KF4 挥砍终点
     };
 
-    /** 4 套动画：A=左→右平砍。B/C/D 暂复用 A，待用户提供关键帧后替换。 */
+    /** 4 套动画：A=左→右平砍。B/C/D 暂复用 A。 */
     private static final float[][][] ANIMS = { ANIM_A, ANIM_A, ANIM_A, ANIM_A };
 
     private static final float[] BUF = new float[9];
+
+    /** 上一帧的 swingProgress，用于检测攻击回落阶段 */
+    private static float prevSwing = 0f;
 
     /**
      * 在已 translate 到基础右手位后调用，应用插值后的 firstperson_righthand 变换。
      *
      * @param ps       PoseStack（已 translate(0.56,-0.52,-0.72)）
      * @param animIdx  动画索引 0~3
-     * @param progress 攻击进度 0→1（getAttackAnim）
+     * @param swing    getAttackAnim 返回值（0→1→0 曲线）
      */
-    public static void applyTransform(PoseStack ps, int animIdx, float progress) {
+    public static void applyTransform(PoseStack ps, int animIdx, float swing) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
-        interpolate(ANIMS[animIdx], Mth.clamp(progress, 0f, 1f), BUF);
 
-        // 复刻原版 ItemTransform.apply（右手，非镜像）
+        // 攻击回落阶段（swing 下降）不播放反向关键帧，直接切回待机
+        if (swing <= 0.02f) {
+            prevSwing = 0f;
+            applyIdle(ps);
+            return;
+        }
+
+        // 只播放向前的挥砍（swing 0→1 阶段），下降阶段停留在 KF4
+        float t = Mth.clamp(swing, 0f, 1f);
+        interpolate(ANIMS[animIdx], t, BUF);
+        prevSwing = swing;
+
         ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
         ps.mulPose(new Quaternionf().rotationXYZ(
             (float) Math.toRadians(BUF[0]),
             (float) Math.toRadians(BUF[1]),
             (float) Math.toRadians(BUF[2])));
         ps.scale(BUF[6], BUF[7], BUF[8]);
+    }
+
+    private static void applyIdle(PoseStack ps) {
+        ps.translate(IDLE[3] / 16f, IDLE[4] / 16f, IDLE[5] / 16f);
+        ps.mulPose(new Quaternionf().rotationXYZ(
+            (float) Math.toRadians(IDLE[0]),
+            (float) Math.toRadians(IDLE[1]),
+            (float) Math.toRadians(IDLE[2])));
+        ps.scale(IDLE[6], IDLE[7], IDLE[8]);
     }
 
     /** 按 time 在关键帧间线性插值，结果写入 out[0..8]。 */

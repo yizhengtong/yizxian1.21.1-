@@ -23,6 +23,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>仅重映射 displayContext 不够——NeoForge 的
  * {@code ClientHooks.handleCameraTransforms} 同时依赖 leftHand 做镜像，
  * 必须一并修改。</p>
+ *
+ * <h3>注意：此类未在 mixins.json 中注册</h3>
+ * <p>此 Mixin 为可选的展示逻辑（纯视觉效果），当前阶段默认不启用。
+ * 如需启用左手/右手姿势重映射，取消此类的 {@code @Mixin} 注解并将
+ * {@code "ItemRendererMixin"} 添加到 {@code yizxianmod.mixins.json}
+ * 的 {@code "mixins"} 数组中即可。</p>
  */
 @Mixin(ItemRenderer.class)
 public abstract class ItemRendererMixin {
