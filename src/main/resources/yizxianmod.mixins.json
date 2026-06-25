@@ -10,7 +10,8 @@
     "TerraBladeFirstPersonMixin",
     "TerraBladeThirdPersonMixin",
     "ItemRendererGlowMixin",
-    "KillBypassMixin"
+    "KillBypassMixin",
+    "AutoAttackMixin"
   ],
   "injectors": {
     "defaultRequire": 1
