@@ -35,20 +35,12 @@ public final class ThirdPersonSwordRenderer {
     private static final float[][][] ANIMS = { ANIM_A, ANIM_A, ANIM_A, ANIM_A };
     private static final float[] BUF = new float[9];
 
-    /** 攻击动画总时长（秒），与 WeaponAnimMixin 一致 */
-    public static final float SWING_DURATION = 1.2f;
+    /** 动画速度倍率（1.0=与冷却同步） */
+    public static float speedMultiplier = 1.0f;
     private static long swingStartMs = 0;
 
     /**
-     * 渲染第三人称武器攻击动画。
-     * 在 renderArmWithItem 取消后调用，PS 已在实体模型 body 中心坐标系。
-     *
-     * @param mc      Minecraft 实例
-     * @param entity  玩家实体
-     * @param stack   武器 ItemStack
-     * @param ps      当前 PoseStack（已在实体 body 中心）
-     * @param buf     渲染 buffer
-     * @param light   光照
+     * 渲染第三人称武器攻击动画。动画时长从武器冷却自动推算。
      */
     public static void render(net.minecraft.client.Minecraft mc,
                               net.minecraft.world.entity.LivingEntity entity,
@@ -57,13 +49,17 @@ public final class ThirdPersonSwordRenderer {
         if (!(stack.getItem() instanceof ILeftHandRender)) return;
         if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
 
-        // swing timer
         long now = System.currentTimeMillis();
         if (player.swinging && swingStartMs == 0) swingStartMs = now;
-        float elapsed = (now - swingStartMs) / 1000f;
-        if (elapsed >= SWING_DURATION) { swingStartMs = 0; return; }
 
-        float t = elapsed / SWING_DURATION;
+        float cooldownTicks = player.getCurrentItemAttackStrengthDelay();
+        if (cooldownTicks <= 0f) cooldownTicks = 20f;
+        float duration = (cooldownTicks / 20f) * speedMultiplier;
+
+        float elapsed = (now - swingStartMs) / 1000f;
+        if (elapsed >= duration) { swingStartMs = 0; return; }
+
+        float t = elapsed / duration;
         float swing = (float) Math.sin(t * Math.PI);
         if (swing <= 0f) return;
 

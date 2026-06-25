@@ -41,8 +41,8 @@ public final class FirstPersonSwordRenderer {
 
     private static final float[] BUF = new float[9];
 
-    /** 攻击动画总时长（秒），与 WeaponAnimMixin.WEAPON_COOLDOWN_TICKS(24) 一致 */
-    private static final float SWING_DURATION = 1.2f; // 24 ticks / 20 tps
+    /** 动画速度倍率（1.0=与冷却同步, >1=加快, <1=放慢） */
+    public static float speedMultiplier = 1.0f;
 
     /** swing 计时：攻击开始时刻（系统毫秒），0 表示无攻击 */
     private static long swingStartMs = 0;
@@ -50,32 +50,34 @@ public final class FirstPersonSwordRenderer {
     /**
      * 在已 translate 到基础右手位后调用，应用插值后的 firstperson_righthand 变换。
      *
-     * <p>用自定义 1.2 秒 swing timer 替代原版 getAttackAnim：
-     * 0→0.6s 出刀（KF1→KF4），0.6→1.2s 收刀（KF4→KF1）。
+     * <p>动画时长自动从武器攻速推算：duration = getCurrentItemAttackStrengthDelay / 20 * speedMultiplier。
+     * 改变武器攻速属性 → 冷却和动画同步变化。</p>
      *
      * @param ps       PoseStack（已 translate(0.56,-0.52,-0.72)）
      * @param animIdx  动画索引 0~3
-     * @param player   本地玩家（用于检测 swinging 状态）
+     * @param player   本地玩家（用于检测 swinging 和读攻速）
      */
     public static void applyTransform(PoseStack ps, int animIdx, net.minecraft.client.player.LocalPlayer player) {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
         long now = System.currentTimeMillis();
-        // 仅在攻击开始时记录时间，timer 自己跑完 1.2s，不随 swinging 清零
         if (player.swinging && swingStartMs == 0) {
             swingStartMs = now;
         }
 
+        // 动画时长（秒）= 冷却 tick / 20 * 倍率
+        float cooldownTicks = player.getCurrentItemAttackStrengthDelay();
+        if (cooldownTicks <= 0f) cooldownTicks = 20f;
+        float duration = (cooldownTicks / 20f) * speedMultiplier;
+
         float elapsed = (now - swingStartMs) / 1000f;
-        // 超过 1.2s 则重置 timer，回到待机
-        if (elapsed >= SWING_DURATION) {
+        if (elapsed >= duration) {
             swingStartMs = 0;
             applyIdle(ps);
             return;
         }
 
-        // 0→1 线性进度 → sin 曲线 0→1→0
-        float t = elapsed / SWING_DURATION;
+        float t = elapsed / duration;
         float swing = (float) Math.sin(t * Math.PI);
 
         interpolate(ANIMS[animIdx], swing, BUF);
