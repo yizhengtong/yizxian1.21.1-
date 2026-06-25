@@ -9,6 +9,9 @@
       "menu": "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;menu:Lnet/minecraft/world/inventory/InventoryMenu;",
       "font": "Lnet/minecraft/client/gui/screens/Screen;font:Lnet/minecraft/client/gui/Font;",
       "minecraft": "Lnet/minecraft/client/gui/screens/Screen;minecraft:Lnet/minecraft/client/Minecraft;"
+    },
+    "net/minecraft/client/yiz/xian/mixin/WeaponAnimMixin": {
+      "attackStrengthTicker": "Lnet/minecraft/world/entity/player/Player;attackStrengthTicker:I"
     }
   }
 }
