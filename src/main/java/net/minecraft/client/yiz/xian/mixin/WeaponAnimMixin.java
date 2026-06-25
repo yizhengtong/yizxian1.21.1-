@@ -60,16 +60,4 @@ public abstract class WeaponAnimMixin {
         ComboStateMachine.onAttack(self);
     }
 
-    // ── 公开查询方法 ──
-
-    /** 检查武器攻击冷却是否已满。外部可直接调用。 */
-    public static boolean isCooldownFull(Player player) {
-        if (!(player.getMainHandItem().getItem() instanceof ILeftHandRender)) return true;
-        return player.getAttackStrengthScale(0f) >= 1.0f;
-    }
-
-    /** 公开获取焊死的冷却 tick 数（1.2s）。 */
-    public static int getCooldownTicks() {
-        return COOLDOWN_TICKS;
-    }
 }
