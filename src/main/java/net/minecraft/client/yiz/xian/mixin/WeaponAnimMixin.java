@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class WeaponAnimMixin {
 
     /** 武器攻击冷却目标时长（tick 数，1.2s @ 20tps） */
-    public static final int WEAPON_COOLDOWN_TICKS = 24;
+    private static final int COOLDOWN_TICKS = 24;
 
     @Shadow public int attackStrengthTicker;
 
@@ -34,7 +34,7 @@ public abstract class WeaponAnimMixin {
     private void yizxian_forceCooldown(CallbackInfoReturnable<Integer> cir) {
         Player self = (Player) (Object) this;
         if (self.getMainHandItem().getItem() instanceof ILeftHandRender) {
-            cir.setReturnValue(WEAPON_COOLDOWN_TICKS);
+            cir.setReturnValue(COOLDOWN_TICKS);
         }
     }
 
@@ -44,7 +44,7 @@ public abstract class WeaponAnimMixin {
     private void yizxian_binaryCooldown(float adjustTicks, CallbackInfoReturnable<Float> cir) {
         Player self = (Player) (Object) this;
         if (!(self.getMainHandItem().getItem() instanceof ILeftHandRender)) return;
-        int delay = WEAPON_COOLDOWN_TICKS;
+        int delay = COOLDOWN_TICKS;
         if (delay <= 0) { cir.setReturnValue(1.0f); return; }
         float raw = (attackStrengthTicker + adjustTicks) / (float) delay;
         cir.setReturnValue(raw >= 1.0f ? 1.0f : 0.0f);
@@ -82,7 +82,7 @@ public abstract class WeaponAnimMixin {
     /** 计算原始冷却比例（0→1），不受二值化影响 */
     private static float computeAttackStrengthScale(Player player) {
         int ticker = ((WeaponAnimMixin) (Object) player).attackStrengthTicker;
-        int delay = WEAPON_COOLDOWN_TICKS;
+        int delay = COOLDOWN_TICKS;
         if (delay <= 0) return 1.0f;
         return Mth.clamp((float) ticker / (float) delay, 0.0f, 1.0f);
     }
