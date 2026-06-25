@@ -38,8 +38,8 @@ public abstract class ItemRendererMixin {
 
         // ── 第三人称攻击动画：ThreadLocal 传来的关键帧 ──
         if (context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
-                && TerraBladeThirdPersonMixin.IS_ATTACKING.get()) {
-            float[] kf = TerraBladeThirdPersonMixin.ANIM_BUF.get();
+                && net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.isActive()) {
+            float[] kf = net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.get();
             if (kf != null) {
                 ci.cancel();
                 ps.pushPose();

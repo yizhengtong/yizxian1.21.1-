@@ -32,17 +32,14 @@ public abstract class TerraBladeThirdPersonMixin {
     );
 
     // 关键帧 (thirdperson_lefthand): {rx,ry,rz, tx,ty,tz, sx,sy,sz, time}
-    static final float[][] KF_TP = {
+    private static final float[][] KF_TP = {
         {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
         {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
         { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
         { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
     };
 
-    /** ThreadLocal: 当前帧的关键帧插值结果，ItemRendererMixin 读取 */
-    static final ThreadLocal<float[]> ANIM_BUF = new ThreadLocal<>();
-    /** ThreadLocal: 当前是否处于攻击动画中 */
-    static final ThreadLocal<Boolean> IS_ATTACKING = ThreadLocal.withInitial(() -> false);
+    /** ThreadLocal 桥接（见 ThirdPersonAnimBridge） */
 
     private static final float[] BUF = new float[9];
     private static long swingStartMs = 0;
@@ -76,8 +73,7 @@ public abstract class TerraBladeThirdPersonMixin {
                     int idx = ComboStateMachine.getCurrentAnimIndex(player);
                     if (idx < 0) idx = 0;
                     interpolate(KF_TP, s, BUF);
-                    ANIM_BUF.set(BUF);
-                    IS_ATTACKING.set(true);
+                    net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.set(BUF);
                 }
             } else {
                 swingStartMs = 0;
@@ -93,8 +89,7 @@ public abstract class TerraBladeThirdPersonMixin {
             ps, buf, light);
 
         if (attacking) {
-            IS_ATTACKING.set(false);
-            ANIM_BUF.remove();
+            net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.clear();
         }
     }
 
