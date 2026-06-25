@@ -8,6 +8,7 @@ import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyReturnValue;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -24,12 +25,13 @@ public abstract class WeaponAnimMixin {
 
     // ── 1. 强行焊死冷却时长 → 24 ticks (1.2s) ──
 
-    @Inject(method = "getCurrentItemAttackStrengthDelay", at = @At("HEAD"), cancellable = true)
-    private void yizxian_forceCooldown(CallbackInfoReturnable<Integer> cir) {
+    @ModifyReturnValue(method = "getCurrentItemAttackStrengthDelay", at = @At("RETURN"))
+    private int yizxian_forceCooldown(int original) {
         Player self = (Player) (Object) this;
         if (self.getMainHandItem().getItem() instanceof ILeftHandRender) {
-            cir.setReturnValue(COOLDOWN_TICKS);
+            return COOLDOWN_TICKS;
         }
+        return original;
     }
 
     // ── 2. 二值化冷却条：原版算完比例后阈值化为 0.0 或 1.0 ──
