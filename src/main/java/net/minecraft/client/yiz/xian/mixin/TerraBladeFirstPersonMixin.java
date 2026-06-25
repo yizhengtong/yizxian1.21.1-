@@ -33,18 +33,29 @@ public abstract class TerraBladeFirstPersonMixin {
             LocalPlayer player, int light, CallbackInfo ci
     ) {
         ItemStack main = player.getMainHandItem();
-        if (!(main.getItem() instanceof ILeftHandRender)) return;
+        ItemStack off  = player.getOffhandItem();
+        boolean m = main.getItem() instanceof ILeftHandRender;
+        boolean o = off.getItem() instanceof ILeftHandRender;
+        if (!m && !o) return;
 
         ci.cancel();
         ItemInHandRenderer self = (ItemInHandRenderer) (Object) this;
-
         int animIdx = ComboStateMachine.getCurrentAnimIndex(player);
 
-        ps.pushPose();
-        ps.translate(0.56F, -0.52F, -0.72F);             // 原版基础右手位
-        FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
-        self.renderItem(player, main,
-            ItemDisplayContext.NONE, false, ps, buf, light);
-        ps.popPose();
+        // 主手和副手统一用 firstperson_righthand 参数渲染
+        if (m) {
+            ps.pushPose();
+            ps.translate(0.56F, -0.52F, -0.72F);
+            FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
+            self.renderItem(player, main, ItemDisplayContext.NONE, false, ps, buf, light);
+            ps.popPose();
+        }
+        if (o) {
+            ps.pushPose();
+            ps.translate(0.56F, -0.52F, -0.72F);
+            FirstPersonSwordRenderer.applyTransform(ps, animIdx, player);
+            self.renderItem(player, off, ItemDisplayContext.NONE, false, ps, buf, light);
+            ps.popPose();
+        }
     }
 }
