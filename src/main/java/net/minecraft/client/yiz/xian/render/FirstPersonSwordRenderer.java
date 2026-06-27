@@ -35,11 +35,11 @@ public final class FirstPersonSwordRenderer {
         {-66,  -1,   1,  20.13f,  4.45f, -16.00f, 1.70f, 1.77f, 0.44f, 1.00f},  // KF4
     };
 
-    /** 动画 B：挥砍2 — 左下→右上撩击（来自用户 22/33/44.bbmodel，更新版）。 */
+    /** 动画 B：挥砍2 — 左下→右上撩击（来自用户 22/33/44.bbmodel，最新版）。 */
     private static final float[][] ANIM_B = {
-        {-54, -11, 180, -23.37f,  5.00f, -17.62f, 1.70f, 1.70f, 0.44f, 0.00f},  // KF1 左下
-        {-51, -22, 137,  -2.62f, 16.75f, -18.12f, 1.70f, 1.70f, 0.44f, 0.50f},  // KF2 中段
-        {-51, -22, 137,  13.88f, 25.00f, -18.12f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF3 右上
+        {-54, -37, 180, -23.37f,  5.00f, -17.62f, 1.70f, 1.70f, 0.44f, 0.00f},  // KF1 左下
+        {-78, -48,  48,  -6.37f, 10.75f, -17.62f, 1.70f, 1.70f, 0.44f, 0.50f},  // KF2 中段
+        {-78, -48,   1,  16.38f, 25.50f, -17.62f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF3 右上
     };
 
     /** 动画数组：A=挥砍1, B=挥砍2。C/D 暂复用 A。 */
@@ -77,14 +77,19 @@ public final class FirstPersonSwordRenderer {
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
         float elapsed = (now - swingStartMs) / 1000f;
-        if (elapsed >= duration) {
+        // 仅挥砍1(animIdx=0)有收刀动画（full sin），其余只播前向，峰值后回待机
+        boolean hasSheath = (animIdx == 0);
+        float maxElapsed = hasSheath ? duration : duration / 2f;
+        if (elapsed >= maxElapsed) {
             swingStartMs = 0;
             applyIdle(ps);
             return;
         }
 
         float t = elapsed / duration;
-        float swing = (float) Math.sin(t * Math.PI);
+        float swing = hasSheath
+            ? (float) Math.sin(t * Math.PI)              // 0→1→0 出刀+收刀
+            : (float) Math.sin(t * Math.PI * 0.5f);       // 0→1 仅出刀
 
         interpolate(ANIMS[animIdx], swing, BUF);
 
