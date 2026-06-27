@@ -95,13 +95,20 @@ public final class FirstPersonSwordRenderer {
         }
 
         float t = elapsed / duration;
-        // 挥砍3(animIdx=2): 线性前向 0→1（自有收刀帧 666，不倒放）
+        // 挥砍3: 线性前向 0→1，最后 15% 平滑过渡到待机（避免 666→idle 跳变）
         // 挥砍1/2: sin 0→1→0（倒放收刀）
-        float swing = (animIdx == 2)
-            ? Math.min(t, 1.0f)
-            : (float) Math.sin(t * Math.PI);
-
-        interpolate(ANIMS[animIdx], swing, BUF);
+        if (animIdx == 2) {
+            float swing = Math.min(t, 1.0f);
+            interpolate(ANIMS[animIdx], swing, BUF);
+            if (t > 0.85f) {
+                float blend = (t - 0.85f) / 0.15f;
+                for (int i = 0; i < 9; i++)
+                    BUF[i] = net.minecraft.util.Mth.lerp(blend, BUF[i], IDLE[i]);
+            }
+        } else {
+            float swing = (float) Math.sin(t * Math.PI);
+            interpolate(ANIMS[animIdx], swing, BUF);
+        }
 
         ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
         ps.mulPose(new Quaternionf().rotationXYZ(
