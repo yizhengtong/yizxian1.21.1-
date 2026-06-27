@@ -14,7 +14,7 @@ import java.util.List;
 public class MuramasaItem extends MeleeWeaponItem implements ILeftHandRender {
 
     private static final double[] DAMAGE = {5.0, 6.5, 8.0, 10.0, 13.0};
-    private static final double[] SPEED  = {1.6, 1.6, 1.6,  1.6,  1.6};
+    private static final double[] SPEED  = {2.5, 2.5, 2.5, 2.5, 2.5};
     private static final Rarity[] RARITY = {Rarity.COMMON, Rarity.UNCOMMON, Rarity.RARE, Rarity.EPIC, Rarity.EPIC};
     private static final String[] NAME_PREFIX = {"平凡", "优秀", "精良", "史诗", "传说"};
 

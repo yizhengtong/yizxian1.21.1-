@@ -14,7 +14,7 @@ import java.util.List;
 public class TerraBladeItem extends MeleeWeaponItem implements ILeftHandRender {
 
     private static final double[] DAMAGE = {8.5, 11.5, 14.0, 18.0, 28.0};
-    private static final double[] SPEED  = {1.0,  1.0,  1.0,  1.0,  1.0};
+    private static final double[] SPEED  = {2.2,  2.2,  2.2,  2.2,  2.2};
     private static final Rarity[] RARITY = {Rarity.COMMON, Rarity.UNCOMMON, Rarity.RARE, Rarity.EPIC, Rarity.EPIC};
     private static final String[] NAME_PREFIX = {"平凡", "优秀", "精良", "史诗", "传说"};
 
