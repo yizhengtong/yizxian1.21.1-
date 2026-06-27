@@ -93,29 +93,19 @@ public final class FirstPersonSwordRenderer {
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
         float elapsed = (now - swingStartMs) / 1000f;
-        float t = elapsed / duration;
+        if (elapsed >= duration) {
+            swingStartMs = 0;
+            applyIdle(ps);
+            return;
+        }
 
+        float t = elapsed / duration;
         if (animIdx == 2) {
-            // ── 挥砍3: 线性正向 0→1（完整播放 KF0→KF6）──
-            // 播到 t=1.0 即 KF6 (777 收刀帧)，然后 0.1s 平滑 blend 到 idle
             float swing = Math.min(t, 1.0f);
             interpolate(ANIMS[animIdx], swing, BUF);
-
-            if (t > 1.0f) {
-                // KF6 → idle 最短路径角度过渡，避免单帧大角度跳变
-                float blendF = Math.min((elapsed - duration) / 0.1f, 1.0f);
-                float[] lastKf = ANIM_C[ANIM_C.length - 1];
-                for (int k = 0; k < 3; k++)
-                    BUF[k] = angleLerp(blendF, lastKf[k], IDLE[k]);
-                for (int k = 3; k < 9; k++)
-                    BUF[k] = Mth.lerp(blendF, lastKf[k], IDLE[k]);
-            }
-            // 注意：不重置 swingStartMs——等 !swinging 时才重置，杜绝动画重播循环
         } else {
-            // ── 挥砍1/2: sin 曲线 0→1→0，自然去程→回程 ──
-            float swing = (float) Math.sin(Math.min(t, 1.0f) * Math.PI);
+            float swing = (float) Math.sin(t * Math.PI);
             interpolate(ANIMS[animIdx], swing, BUF);
-            // sin(π)=0 → KF0≈idle，超时后保持 KF0 姿态
         }
 
         ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
