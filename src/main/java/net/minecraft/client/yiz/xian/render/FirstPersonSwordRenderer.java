@@ -77,7 +77,7 @@ public final class FirstPersonSwordRenderer {
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
         float elapsed = (now - swingStartMs) / 1000f;
-        // 仅挥砍1(animIdx=0)有收刀动画（full sin），其余只播前向，峰值后回待机
+        // 仅挥砍1(animIdx=0)有收刀动画（full sin 0→1→0），其余只播前向 0→1
         boolean hasSheath = (animIdx == 0);
         float maxElapsed = hasSheath ? duration : duration / 2f;
         if (elapsed >= maxElapsed) {
@@ -86,10 +86,10 @@ public final class FirstPersonSwordRenderer {
             return;
         }
 
-        float t = elapsed / duration;
+        float t = hasSheath ? (elapsed / duration) : (elapsed / (duration / 2f));
         float swing = hasSheath
-            ? (float) Math.sin(t * Math.PI)              // 0→1→0 出刀+收刀
-            : (float) Math.sin(t * Math.PI * 0.5f);       // 0→1 仅出刀
+            ? (float) Math.sin(t * Math.PI)          // 0→1→0 出刀+收刀
+            : (float) Math.sin(t * Math.PI / 2f);    // 0→1 仅出刀
 
         interpolate(ANIMS[animIdx], swing, BUF);
 
