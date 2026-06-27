@@ -35,8 +35,16 @@ public final class FirstPersonSwordRenderer {
         {-66,  -1,   1,  20.13f,  4.45f, -16.00f, 1.70f, 1.77f, 0.44f, 1.00f},  // KF4
     };
 
-    /** 动画 B：挥砍2 — 左下→右上撩击（111~555.bbmodel，5 帧含收刀）。 */
+    /** 动画 B：挥砍2 — 左下→右上撩击（11~44.bbmodel，4 帧含收刀）。 */
     private static final float[][] ANIM_B = {
+        {-52, -69, -180, -22.87f, -1.30f, -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},  // KF0 起手(11)
+        {-54, -37,  137, -23.37f,  2.00f, -17.62f, 1.70f, 1.70f, 0.44f, 0.34f},  // KF1(22)
+        {-78, -48,   48,  -1.62f, 12.75f, -17.62f, 1.70f, 1.70f, 0.44f, 0.67f},  // KF2(33)
+        {-78, -48,    1,  21.13f, 27.50f, -17.62f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF3(44)
+    };
+
+    /** 动画 C：挥砍3（111~555.bbmodel，5 帧含收刀）。 */
+    private static final float[][] ANIM_C = {
         {-52, -69, -180, -22.87f, -1.30f, -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},  // KF0 起手(111)
         {-37, -35,  180, -22.62f,  4.95f, -7.62f, 1.00f, 1.00f, 0.60f, 0.25f},  // KF1(222)
         {-52, -28,  123, -18.12f, 12.70f, -7.62f, 1.00f, 1.00f, 0.60f, 0.50f},  // KF2(333)
@@ -44,8 +52,8 @@ public final class FirstPersonSwordRenderer {
         { 31,  95,  -69,  -9.00f,  1.50f,-24.50f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF4(555)
     };
 
-    /** 动画数组：A=挥砍1, B=挥砍2。C/D 暂复用 A。 */
-    private static final float[][][] ANIMS = { ANIM_A, ANIM_B, ANIM_A, ANIM_A };
+    /** 动画数组：A=挥砍1, B=挥砍2, C=挥砍3。D 暂复用 A。 */
+    private static final float[][][] ANIMS = { ANIM_A, ANIM_B, ANIM_C, ANIM_A };
 
     private static final float[] BUF = new float[9];
 
