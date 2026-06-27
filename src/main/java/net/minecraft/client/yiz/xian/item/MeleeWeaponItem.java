@@ -46,28 +46,14 @@ public class MeleeWeaponItem extends SwordItem implements IWeaponItem, ISkillWea
         this.attackSpeed = attackSpeed;
     }
 
-    // ── 无耐久 ──
+    // ── 真正无耐久 ──
 
-    @Override
-    public boolean isDamageable(ItemStack stack) {
-        return false;
-    }
-
-    @Override
-    public int getMaxDamage(ItemStack stack) {
-        return 0;
-    }
-
-    /** 禁止铁砧或经验修补等方式修复。 */
-    @Override
-    public boolean isRepairable(ItemStack stack) {
-        return false;
-    }
-
-    @Override
-    public boolean isEnchantable(ItemStack stack) {
-        return true;
-    }
+    @Override public boolean canBeDepleted() { return false; }
+    @Override public boolean isBarVisible(ItemStack stack) { return false; }
+    @Override public boolean isDamageable(ItemStack stack) { return false; }
+    @Override public int getMaxDamage(ItemStack stack) { return 0; }
+    @Override public boolean isRepairable(ItemStack stack) { return false; }
+    @Override public boolean isEnchantable(ItemStack stack) { return true; }
 
     // ── 属性查询 ──
 
