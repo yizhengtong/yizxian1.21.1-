@@ -108,7 +108,7 @@ public final class FirstPersonSwordRenderer {
         }
 
         float t = elapsed / duration;
-        if (animIdx == 2) {
+        if (animIdx >= 2) {  // 挥砍3/4: 线性前向，播完直跳待机
             float swing = Math.min(t, 1.0f);
             interpolate(ANIMS[animIdx], swing, BUF);
         } else {
