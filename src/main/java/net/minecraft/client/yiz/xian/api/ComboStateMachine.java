@@ -23,11 +23,11 @@ public final class ComboStateMachine {
     public static final int COMBO_DURATION = 20;
 
     /** 过渡窗口：攻击需在 [WINDOW_START, WINDOW_END] ticks 内触发才算连招 */
-    public static final int WINDOW_START = 4;
-    public static final int WINDOW_END = 16;
+    public static final int WINDOW_START = 2;
+    public static final int WINDOW_END = 24;
 
     /** 超时：超过此 tick 未攻击自动回到 IDLE */
-    public static final int TIMEOUT = 30;
+    public static final int TIMEOUT = 40;
 
     /** 链 A 的动画序列：挥砍1(A=0)→挥砍2(B=1) 交替 */
     private static final int[] CHAIN_A = {0, 1};
