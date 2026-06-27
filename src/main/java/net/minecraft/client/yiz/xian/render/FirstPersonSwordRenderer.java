@@ -43,7 +43,7 @@ public final class FirstPersonSwordRenderer {
         {-78, -48,    1,  21.13f, 27.50f, -17.62f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF3(44)
     };
 
-    /** 动画 C：挥砍3（7 帧正向播一轮，超时直接 applyIdle，避免大角度跳变）。 */
+    /** 动画 C：挥砍3（7 帧正向播一轮 → KF6→idle blend 0.1s → 保持 idle）。 */
     private static final float[][] ANIM_C = {
         {-52, -69, -180, -22.87f, -1.30f, -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},  // KF0 起手(111)
         {-37, -35,  180, -22.62f,  4.95f, -7.62f, 1.00f, 1.00f, 0.60f, 0.15f},  // KF1(222)
@@ -71,6 +71,9 @@ public final class FirstPersonSwordRenderer {
      * <p>动画时长自动从武器攻速推算：duration = getCurrentItemAttackStrengthDelay / 20 * speedMultiplier。
      * 改变武器攻速属性 → 冷却和动画同步变化。</p>
      *
+     * <p>生命周期：攻击开始(singStartMs=now) → 动画播放 → 播完保持 idle
+     * → 玩家停止 swing(!player.swinging) → swingStartMs 归零 → 下次攻击重新触发。</p>
+     *
      * @param ps       PoseStack（已 translate(0.56,-0.52,-0.72)）
      * @param animIdx  动画索引 0~3
      * @param player   本地玩家（用于检测 swinging 和读攻速）
@@ -79,6 +82,7 @@ public final class FirstPersonSwordRenderer {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
         long now = System.currentTimeMillis();
+        // 首次检测到攻击 → 开始计时
         if (player.swinging && swingStartMs == 0) {
             swingStartMs = now;
         }
@@ -89,22 +93,29 @@ public final class FirstPersonSwordRenderer {
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
         float elapsed = (now - swingStartMs) / 1000f;
-        if (elapsed >= duration) {
-            swingStartMs = 0;
-            applyIdle(ps);
-            return;
-        }
-
         float t = elapsed / duration;
-        // 挥砍3: 线性前向 0→1，最后 15% 平滑过渡到待机（避免 666→idle 跳变）
-        // 挥砍1/2: sin 0→1→0（倒放收刀）
+
         if (animIdx == 2) {
-            // 挥砍3: 线性前向 0→1，最后一帧=待机，播完即停
+            // ── 挥砍3: 线性正向 0→1（完整播放 KF0→KF6）──
+            // 播到 t=1.0 即 KF6 (777 收刀帧)，然后 0.1s 平滑 blend 到 idle
             float swing = Math.min(t, 1.0f);
             interpolate(ANIMS[animIdx], swing, BUF);
+
+            if (t > 1.0f) {
+                // KF6 → idle 最短路径角度过渡，避免单帧大角度跳变
+                float blendF = Math.min((elapsed - duration) / 0.1f, 1.0f);
+                float[] lastKf = ANIM_C[ANIM_C.length - 1];
+                for (int k = 0; k < 3; k++)
+                    BUF[k] = angleLerp(blendF, lastKf[k], IDLE[k]);
+                for (int k = 3; k < 9; k++)
+                    BUF[k] = Mth.lerp(blendF, lastKf[k], IDLE[k]);
+            }
+            // 注意：不重置 swingStartMs——等 !swinging 时才重置，杜绝动画重播循环
         } else {
-            float swing = (float) Math.sin(t * Math.PI);
+            // ── 挥砍1/2: sin 曲线 0→1→0，自然去程→回程 ──
+            float swing = (float) Math.sin(Math.min(t, 1.0f) * Math.PI);
             interpolate(ANIMS[animIdx], swing, BUF);
+            // sin(π)=0 → KF0≈idle，超时后保持 KF0 姿态
         }
 
         ps.translate(BUF[3] / 16f, BUF[4] / 16f, BUF[5] / 16f);
@@ -133,7 +144,8 @@ public final class FirstPersonSwordRenderer {
         ps.scale(IDLE[6], IDLE[7], IDLE[8]);
     }
 
-    /** 按 time 在关键帧间线性插值，结果写入 out[0..8]。 */
+    /** 按 time 在关键帧间插值，结果写入 out[0..8]。
+     *  rotX/Y/Z（索引 0/1/2）使用最短路径角度插值，避免 ±180° 环绕时走长弧。 */
     private static void interpolate(float[][] kfs, float t, float[] out) {
         int n = kfs.length;
         if (t <= kfs[0][9]) { System.arraycopy(kfs[0], 0, out, 0, 9); return; }
@@ -142,11 +154,29 @@ public final class FirstPersonSwordRenderer {
             float t0 = kfs[i][9], t1 = kfs[i + 1][9];
             if (t >= t0 && t <= t1) {
                 float f = (t1 - t0) < 1e-5f ? 0f : (t - t0) / (t1 - t0);
-                for (int k = 0; k < 9; k++)
+                // rotX/rotY/rotZ: 最短路径角度插值
+                for (int k = 0; k < 3; k++)
+                    out[k] = angleLerp(f, kfs[i][k], kfs[i + 1][k]);
+                // transX/Y/Z + scaleX/Y/Z: 线性插值
+                for (int k = 3; k < 9; k++)
                     out[k] = Mth.lerp(f, kfs[i][k], kfs[i + 1][k]);
                 return;
             }
         }
         System.arraycopy(kfs[n - 1], 0, out, 0, 9);
+    }
+
+    /**
+     * 最短路径角度线性插值。
+     * 普通 lerp(0.5, -180, 180) = 0（走 360° 长弧），
+     * angleLerp(0.5, -180, 180) = ±180（0° 短弧，-180 和 180 是同一朝向）。
+     */
+    private static float angleLerp(float f, float a, float b) {
+        float diff = b - a;
+        // 归一化到 [-180, 180]
+        diff = diff % 360f;
+        if (diff > 180f) diff -= 360f;
+        if (diff < -180f) diff += 360f;
+        return a + f * diff;
     }
 }
