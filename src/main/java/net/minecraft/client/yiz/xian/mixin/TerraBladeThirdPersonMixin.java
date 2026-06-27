@@ -31,12 +31,31 @@ public abstract class TerraBladeThirdPersonMixin {
         PoseStack ps, MultiBufferSource buf, int light
     );
 
-    // 关键帧 (thirdperson_lefthand): {rx,ry,rz, tx,ty,tz, sx,sy,sz, time}
-    private static final float[][] KF_TP = {
-        {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
-        {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
-        { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
-        { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
+    // 第三人称关键帧: [animIdx][frame] = {rx,ry,rz, tx,ty,tz, sx,sy,sz, time}
+    private static final float[][][] KF_TP = {
+        { // 挥砍1 (左→右)
+            {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
+            {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
+            { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
+            { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
+        },
+        { // 挥砍2 (左下→右上)
+            {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.00f},
+            { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.50f},
+            { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
+        },
+        { // C (暂复用挥砍1)
+            {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
+            {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
+            { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
+            { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
+        },
+        { // D (暂复用挥砍1)
+            {-5,  89, 155,   0.25f, -15.00f, -1.25f, 1.70f, 1.70f, 0.79f, 0.00f},
+            {12,  -1, -99,  13.00f,  14.25f,  6.75f, 1.70f, 1.70f, 0.79f, 0.35f},
+            { 5,   6, -45,  -5.25f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 0.65f},
+            { 5,   6,  -3, -24.50f,  21.95f,  9.00f, 1.70f, 1.70f, 0.44f, 1.00f},
+        },
     };
 
     /** ThreadLocal 桥接（见 ThirdPersonAnimBridge） */
@@ -69,7 +88,8 @@ public abstract class TerraBladeThirdPersonMixin {
                 attacking = true;
                 int idx = ComboStateMachine.getCurrentAnimIndex(player);
                 if (idx < 0) idx = 0;
-                interpolate(KF_TP, s, BUF);
+                if (idx >= 0 && idx < KF_TP.length)
+                    interpolate(KF_TP[idx], s, BUF);
                 net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.set(BUF);
             }
         } else {

@@ -27,8 +27,7 @@ public final class FirstPersonSwordRenderer {
     private static final float[] IDLE =
         {-52, -69, -180, -22.87f, -1.3f, -1.12f, 1, 1, 0.44f, 0f};
 
-    /** 动画 A：左→右平砍（来自用户 1~4.bbmodel）。
-     *  swing 上升时播放 KF1→KF4 向前挥砍，下降时倒播 KF4→KF1 作为收刀。 */
+    /** 动画 A：挥砍1 — 左→右平砍（来自用户 1~4.bbmodel）。 */
     private static final float[][] ANIM_A = {
         {-52, -69, 180, -22.87f, -1.30f,  -1.12f, 1.00f, 1.00f, 0.44f, 0.00f},  // KF1
         {-66,  -1, 108, -33.75f,  4.45f, -16.00f, 1.70f, 1.70f, 0.44f, 0.35f},  // KF2
@@ -36,8 +35,15 @@ public final class FirstPersonSwordRenderer {
         {-66,  -1,   1,  20.13f,  4.45f, -16.00f, 1.70f, 1.77f, 0.44f, 1.00f},  // KF4
     };
 
-    /** 4 套动画：A=左→右平砍。B/C/D 暂复用 A。 */
-    private static final float[][][] ANIMS = { ANIM_A, ANIM_A, ANIM_A, ANIM_A };
+    /** 动画 B：挥砍2 — 左下→右上撩击（来自用户 22/33/44.bbmodel）。 */
+    private static final float[][] ANIM_B = {
+        {-88, -61, 83, -27.62f, -7.50f, -17.62f, 1.70f, 1.70f, 0.44f, 0.00f},  // KF1 左下
+        {-61, -60, 69, -13.12f,  7.75f, -17.62f, 1.70f, 1.70f, 0.44f, 0.50f},  // KF2 中段
+        {-19, -60, 69,   1.63f, 18.00f, -17.62f, 1.70f, 1.70f, 0.44f, 1.00f},  // KF3 右上
+    };
+
+    /** 动画数组：A=挥砍1, B=挥砍2。C/D 暂复用 A。 */
+    private static final float[][][] ANIMS = { ANIM_A, ANIM_B, ANIM_A, ANIM_A };
 
     private static final float[] BUF = new float[9];
 

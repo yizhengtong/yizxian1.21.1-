@@ -29,8 +29,8 @@ public final class ComboStateMachine {
     /** 超时：超过此 tick 未攻击自动回到 IDLE */
     public static final int TIMEOUT = 30;
 
-    /** 链 A 的动画序列：左平砍(A=0)→左上→右下(D=3)→左下→左上(C=2)→右平砍(B=1)→... */
-    private static final int[] CHAIN_A = {0, 3, 2, 1};
+    /** 链 A 的动画序列：挥砍1(A=0)→挥砍2(B=1) 交替 */
+    private static final int[] CHAIN_A = {0, 1};
 
     // ── PlayerData keys ──
     private static final String KEY_STEP = "yizxianmod:combo_step";
