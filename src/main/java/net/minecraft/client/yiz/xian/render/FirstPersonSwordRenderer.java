@@ -79,6 +79,10 @@ public final class FirstPersonSwordRenderer {
         if (animIdx < 0 || animIdx >= ANIMS.length) animIdx = 0;
 
         long now = System.currentTimeMillis();
+        // swing 结束后才重置 timer（避免挥砍3 线性动画在 swing 持续期间重播）
+        if (!player.swinging) {
+            swingStartMs = 0;
+        }
         if (player.swinging && swingStartMs == 0) {
             swingStartMs = now;
         }
@@ -89,8 +93,7 @@ public final class FirstPersonSwordRenderer {
         float duration = (cooldownTicks / 20f) * speedMultiplier;
 
         float elapsed = (now - swingStartMs) / 1000f;
-        if (elapsed >= duration) {
-            swingStartMs = 0;
+        if (elapsed >= duration || swingStartMs == 0) {
             applyIdle(ps);
             return;
         }
