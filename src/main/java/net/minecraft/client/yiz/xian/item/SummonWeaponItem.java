@@ -1,6 +1,8 @@
 package net.minecraft.client.yiz.xian.item;
 
 import net.minecraft.client.yiz.api.YizModQZKAPI;
+import net.minecraft.client.yiz.weapon.WeaponProfile;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -20,8 +22,19 @@ import net.minecraft.world.item.ItemStack;
  */
 public class SummonWeaponItem extends WeaponItem {
 
+    /**
+     * 旧构造器（向后兼容）。
+     * @deprecated 新武器应使用 {@link #SummonWeaponItem(Properties, ResourceLocation, WeaponProfile, int)}
+     */
+    @Deprecated
     public SummonWeaponItem(Properties properties) {
         super(properties, WeaponType.SUMMON);
+    }
+
+    /** 新构造器 — 关联 WeaponProfile。 */
+    public SummonWeaponItem(Properties properties, ResourceLocation weaponId,
+                            WeaponProfile profile, int level) {
+        super(properties, WeaponType.SUMMON, weaponId, profile, level);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -35,6 +48,7 @@ public class SummonWeaponItem extends WeaponItem {
      * 默认返回 false 表示未处理，由子类决定是否覆盖。</p>
      */
     public boolean onSummonAttack(Player attacker, LivingEntity target, ItemStack weapon) {
+        dispatchSummonAttack(attacker, target, weapon);
         return false;
     }
 

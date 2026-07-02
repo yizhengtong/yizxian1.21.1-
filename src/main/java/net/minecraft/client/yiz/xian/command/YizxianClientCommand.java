@@ -50,6 +50,10 @@ public final class YizxianClientCommand {
                     .then(Commands.literal("fix")
                         .executes(YizxianClientCommand::toggleFix))
                 )
+                .then(Commands.literal("jq")
+                    .then(Commands.argument("level", IntegerArgumentType.integer(1, 5))
+                        .executes(YizxianClientCommand::spawnEnergyWave))
+                )
                 .then(Commands.literal("terra")
                     .then(Commands.literal("gui")
                         .executes(YizxianClientCommand::openTerraGui))
@@ -211,6 +215,22 @@ public final class YizxianClientCommand {
         AnimationPreviewRenderer.stop();
         ctx.getSource().sendSuccess(
             () -> Component.literal("动画预览已停止"), false);
+        return 1;
+    }
+
+    /** /yizxian jq <level> — 在视线前方生成剑气能量波 */
+    private static int spawnEnergyWave(CommandContext<CommandSourceStack> ctx) {
+        int level = IntegerArgumentType.getInteger(ctx, "level");
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player == null) return 0;
+
+        var eye = player.getEyePosition();
+        var look = player.getLookAngle();
+        var pos = eye.add(look.scale(5));
+        var item = player.getMainHandItem().copy();
+        if (item.isEmpty()) item = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_SWORD);
+        net.minecraft.client.yiz.xian.render.EnergyWaveRenderer.spawn(pos, player.getYRot(), player.getXRot(), item, level);
+        ctx.getSource().sendSuccess(() -> net.minecraft.network.chat.Component.literal("§d剑气已生成 (Lv." + level + ")"), false);
         return 1;
     }
 

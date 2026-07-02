@@ -1,38 +1,41 @@
 package net.minecraft.client.yiz.xian.item;
 
+import net.minecraft.client.yiz.weapon.MeleeWeaponScaling;
+import net.minecraft.client.yiz.weapon.WeaponProfile;
+import net.minecraft.client.yiz.xian.YizxianMod;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Rarity;
-import net.minecraft.world.item.TooltipFlag;
-
-import java.util.List;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * 村正 — 近战剑，5 级品质（平凡→传说），无耐久。
+ * <p>使用 {@link MeleeWeaponScaling} 标准化倍率自动生成面板。
+ * Tooltip 由 {@link MeleeWeaponItem} 统一渲染。</p>
  */
 public class MuramasaItem extends MeleeWeaponItem implements ILeftHandRender {
 
-    private static final double[] DAMAGE = {5.0, 6.5, 8.0, 10.0, 13.0};
-    private static final double[] SPEED  = {2.5, 2.5, 2.5, 2.5, 2.5};
-    private static final Rarity[] RARITY = {Rarity.COMMON, Rarity.UNCOMMON, Rarity.RARE, Rarity.EPIC, Rarity.EPIC};
-    private static final String[] NAME_PREFIX = {"平凡", "优秀", "精良", "史诗", "传说"};
-
-    private final int level;
+    static final ResourceLocation WEAPON_ID =
+        ResourceLocation.fromNamespaceAndPath(YizxianMod.MODID, "muramasa");
+    static final WeaponProfile PROFILE = buildDefault();
 
     public MuramasaItem(int level) {
-        super(new Properties().stacksTo(1).rarity(RARITY[level - 1]),
-              DAMAGE[level - 1], SPEED[level - 1]);
-        this.level = level;
+        super(new Properties(), WEAPON_ID, PROFILE, level);
     }
 
-    public int getLevel() { return level; }
-
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.literal(
-            "§7品质: §f" + NAME_PREFIX[level - 1]
-            + "  §7攻击: §c" + DAMAGE[level - 1]
-            + "  §7攻速: §b" + SPEED[level - 1]));
+    /** 标准化 Profile：Lv1 基础面板 → 自定义攻速倍率序列。 */
+    public static WeaponProfile buildDefault() {
+        return MeleeWeaponScaling.buildProfileWithSpeeds(WEAPON_ID,
+            new MeleeWeaponScaling.BaseStats(
+                5.0,   // 攻击力 Lv1
+                1.8,   // 攻击速度 Lv1
+                12,    // 暴击率 Lv1
+                15,    // 暴伤 Lv1
+                6,     // 吸血 Lv1
+                2.5,   // 溅射半径 Lv1
+                30,    // 溅射伤害 Lv1
+                20,    // 溅射衰减 Lv1
+                4.0    // 实体交互距离 Lv1
+            ),
+            new double[]{1.8, 1.9, 2.0, 2.1, 2.2}  // 自定义攻速序列
+        );
     }
 }

@@ -5,7 +5,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -20,10 +19,6 @@ public abstract class AutoAttackMixin {
     @Shadow public LocalPlayer player;
     @Shadow public abstract boolean startAttack();
 
-    /**
-     * 每 tick 检查：攻击键按住 + 非观察者 + 冷却满 → 自动攻击。
-     * 绕过原版 consumeClick（只响应按下瞬间）的限制。
-     */
     @Inject(method = "tick", at = @At("TAIL"))
     private void yizxian_autoAttack(CallbackInfo ci) {
         if (player == null || player.isSpectator()) return;

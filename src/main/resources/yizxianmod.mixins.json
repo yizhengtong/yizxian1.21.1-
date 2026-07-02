@@ -5,14 +5,19 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "HealMixin",
-    "InventoryScreenMixin",
     "WeaponAnimMixin",
     "TerraBladeFirstPersonMixin",
     "TerraBladeThirdPersonMixin",
     "ItemRendererMixin",
     "ItemRendererGlowMixin",
     "KillBypassMixin",
-    "AutoAttackMixin"
+    "AutoAttackMixin",
+    "PlayerReachMixin",
+    "MixinInventoryMenu"
+  ],
+  "client": [
+    "AbstractContainerScreenAccessor",
+    "MixinInventoryScreen"
   ],
   "injectors": {
     "defaultRequire": 1

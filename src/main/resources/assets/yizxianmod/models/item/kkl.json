@@ -1,0 +1,19 @@
+{
+  "textures": {
+    "0": "yizxianmod:item/kkl"
+  },
+  "elements": [
+    {
+      "from": [-8, -8, 0],
+      "to": [8, 8, 0.1],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#0", "cullface": false },
+        "south": { "uv": [16, 0, 0, 16], "texture": "#0", "cullface": false },
+        "east":  { "uv": [0, 0, 0, 16], "texture": "#0", "cullface": false },
+        "west":  { "uv": [16, 0, 0, 16], "texture": "#0", "cullface": false },
+        "up":    { "uv": [0, 0, 16, 0], "texture": "#0", "cullface": false },
+        "down":  { "uv": [0, 16, 16, 0], "texture": "#0", "cullface": false }
+      }
+    }
+  ]
+}

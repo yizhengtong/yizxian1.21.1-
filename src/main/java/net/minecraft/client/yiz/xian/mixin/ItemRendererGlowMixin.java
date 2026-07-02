@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.xian.mixin;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -40,6 +41,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(ItemRenderer.class)
 public abstract class ItemRendererGlowMixin {
+
+    /**
+     * 描边外壳专用的私有 immediate 缓冲源。
+     * <p>Iris/Sodium 把全局 bufferSource 替换成延迟源（endBatch 是 no-op），外壳会被推迟到
+     * 不透明模型之后绘制 → 包裹态。这里用私有 vanilla 源，endBatch 真正同步刷新，
+     * 保证"外壳先画 → 原版模型后画盖内部"。与 TerraprismaRenderHandler.EDGE_BUFFER 同理。
+     */
+    private static final MultiBufferSource.BufferSource IMMEDIATE =
+        MultiBufferSource.immediate(new ByteBufferBuilder(512));
 
     @Shadow
     private void renderModelLists(BakedModel model, ItemStack stack, int packedLight,
@@ -116,7 +126,7 @@ public abstract class ItemRendererGlowMixin {
         Vector3f[] directions = GlowEdgeBakedModel.getDirections(isGui);
         int uType = g.getGlowType();
 
-        VertexConsumer consumer = source.getBuffer(OutlineRenderType.GLOW_EDGE);
+        VertexConsumer consumer = IMMEDIATE.getBuffer(OutlineRenderType.GLOW_EDGE);
 
         for (int di = 0; di < directions.length; di++) {
             Vector3f dir = directions[di];
@@ -140,9 +150,8 @@ public abstract class ItemRendererGlowMixin {
             ps.popPose();
         }
 
-        if (source instanceof MultiBufferSource.BufferSource bs) {
-            bs.endBatch(OutlineRenderType.GLOW_EDGE);
-        }
+        // 私有源同步刷新 → 外壳立即绘制（Iris 下全局源 endBatch 是 no-op，会导致包裹态）
+        IMMEDIATE.endBatch(OutlineRenderType.GLOW_EDGE);
 
         ps.popPose();
     }

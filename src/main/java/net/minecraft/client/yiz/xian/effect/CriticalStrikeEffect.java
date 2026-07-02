@@ -26,7 +26,8 @@ public class CriticalStrikeEffect extends AbstractEffect {
 
     private static final String MODID = "yizxianmod";
     private static final String EFF_ID = "critical_strike";
-    private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(MODID, EFF_ID);
+    /** 本效果的 ResourceLocation，public 以便移除天赋时按 id 分发运行时清理。 */
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(MODID, EFF_ID);
 
     public static final String DATA_TIMER = "yizxianmod:crit_timer";
     public static final String DATA_TARGET = "yizxianmod:crit_target";

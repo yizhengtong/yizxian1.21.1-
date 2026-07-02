@@ -23,7 +23,8 @@ public class SharpBladeEffect extends AbstractEffect {
     private static final String MODID = "yizxianmod";
     private static final String EFF_ID = "sharp_blade";
     private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(MODID, EFF_ID);
-    private static final String BASE_DMG_KEY = "yizmodqzk:sharp_blade_base";
+    /** 每级伤害增幅（小数倍率，0.15 = +15%）。前置库 modifyHurtAmount 以 amount *= (1 + amp) 消费。 */
+    private static final double AMP_PER_LEVEL = 0.15;
 
     public SharpBladeEffect(int level) {
         super(
@@ -47,18 +48,19 @@ public class SharpBladeEffect extends AbstractEffect {
     }
 
     /**
-     * 重算该物品上利刃效果的攻击力加成。
+     * 重算该物品上利刃效果的伤害加成。
      * 每次等级变动后调用，取代每 tick 调度。
+     *
+     * <p>写入 {@code %damage_amplification} NBT（非 ATTACK_DAMAGE 物品修饰符）。
+     * 前置库 {@code LivingEntityMixin.modifyHurtAmount} 在 hurt() 入口以
+     * {@code amount *= (1 + amp)} 消费该值，立即生效，且与原版属性系统不冲突。
+     * 每 level 提供 {@link #AMP_PER_LEVEL}（+15%）伤害增幅。</p>
      */
     public static void recalculate(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return;
 
         int level = readStoredLevel(stack);
-        double baseDmg = getBaseDamage(stack);
-        if (baseDmg <= 0) return;
-
-        double newDmg = baseDmg * (1.0 + level * 0.15);
-        ItemAttributeHandler.setAttackDamage(stack, newDmg);
+        ItemAttributeHandler.setDamageAmplification(stack, level * AMP_PER_LEVEL);
     }
 
     @Override
@@ -81,24 +83,5 @@ public class SharpBladeEffect extends AbstractEffect {
             }
         }
         return 0;
-    }
-
-    /** 获取武器基准伤害（首次读取时记录当前面板值） */
-    private static double getBaseDamage(ItemStack stack) {
-        CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
-        if (cd != null) {
-            CompoundTag tag = cd.copyTag();
-            if (tag.contains(BASE_DMG_KEY)) {
-                return tag.getDouble(BASE_DMG_KEY);
-            }
-        }
-        // 第一次访问：记录当前面板伤害为基准
-        double current = ItemAttributeHandler.getAttackDamage(stack);
-        if (current <= 0) return 0;
-        // 写入基准值
-        CompoundTag tag = cd != null ? cd.copyTag() : new CompoundTag();
-        tag.putDouble(BASE_DMG_KEY, current);
-        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        return current;
     }
 }

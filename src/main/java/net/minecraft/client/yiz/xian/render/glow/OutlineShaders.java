@@ -4,8 +4,8 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.yiz.api.ShaderEnvironmentAPI;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.joml.Vector2f;
 
@@ -14,6 +14,9 @@ import java.io.IOException;
 /**
  * 着色器管理器 — 注册 yizxianmod 的 glow_edge 着色器。
  * 由 {@link net.minecraft.client.yiz.xian.YizxianModClient} 订阅 RegisterShadersEvent 加载。
+ *
+ * <p>光影兼容：注册前调用 {@link ShaderEnvironmentAPI#ensureShaderCompatibility()}，
+ * 确保光影包激活时 Iris 的 allowUnknownShaders 已启用，自定义着色器不被屏蔽。</p>
  */
 public final class OutlineShaders {
 
@@ -34,10 +37,11 @@ public final class OutlineShaders {
     }
 
     /**
-     * Mod 总线订阅 — 加载 glow_edge 着色器。
-     * 由 {@link net.minecraft.client.yiz.xian.YizxianModClient} 在构造函数中调用。
+     * 注册 glow_edge 着色器。
+     * 光影兼容：先确保 Iris 允许未知着色器（光影包激活时不被屏蔽）。
      */
     public static void onRegisterShaders(RegisterShadersEvent event) throws IOException {
+        ShaderEnvironmentAPI.ensureShaderCompatibility();
         event.registerShader(
             new ShaderInstance(event.getResourceProvider(),
                 ResourceLocation.fromNamespaceAndPath("yizxianmod", "glow_edge"),

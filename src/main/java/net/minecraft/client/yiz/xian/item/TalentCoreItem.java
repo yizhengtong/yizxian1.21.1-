@@ -59,6 +59,11 @@ public class TalentCoreItem extends Item implements ITalentItem {
             int newLevel = TalentLevelTracker.decreaseLevel(player, effectId);
             if (newLevel <= 0) {
                 UnlockManager.lock(player, effectId);
+                // 天赋被完全移除时，必须清理其运行时状态。
+                // 否则面板虽不显示，但 crit_timer / crit_target / entity_crit_range 修饰符会残留，
+                // 导致「索敌 + 会心伤害 + 攻击距离加成」在移除后仍继续生效。
+                // （AbstractEffect 基类没有 onRemoved 钩子，故在此显式按 effectId 分发清理。）
+                clearRuntimeState(player, effectId);
             }
         } else {
             if (!UnlockManager.isUnlocked(player, effectId)) {
@@ -68,6 +73,18 @@ public class TalentCoreItem extends Item implements ITalentItem {
         }
         if (player instanceof net.minecraft.server.level.ServerPlayer sp) {
             NetworkHandler.syncPlayerUnlocks(sp);
+        }
+    }
+
+    /**
+     * 天赋被移除时清理对应的运行时状态。
+     * 目前只有会心一击（critical_strike）持有运行时数据（crit_timer / crit_target / entity_crit_range 修饰符），
+     * 未来若新增其他带运行时状态的 EntityPerception 天赋，在此追加分支即可。
+     */
+    private void clearRuntimeState(Player player, ResourceLocation effectId) {
+        if (net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect.ID.equals(effectId)) {
+            net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect.reset(player);
+            net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider.reset(player);
         }
     }
 
@@ -90,19 +107,8 @@ public class TalentCoreItem extends Item implements ITalentItem {
         } else {
             int current = EffectNBTHandler.getEffectLevel(target, effectId);
             EffectNBTHandler.setEffectLevel(target, effectId, Math.min(current + 1, maxLevel));
-            // 首次应用时记录武器基准伤害
-            if (current <= 0) {
-                double base = net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler.getAttackDamage(target);
-                if (base > 0) {
-                    var existing = target.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
-                    net.minecraft.nbt.CompoundTag tag = existing != null ? existing.copyTag() : new net.minecraft.nbt.CompoundTag();
-                    tag.putDouble("yizmodqzk:sharp_blade_base", base);
-                    target.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                        net.minecraft.world.item.component.CustomData.of(tag));
-                }
-            }
         }
-        // 等级变动后立即重算物品属性
+        // 等级变动后立即重算物品属性（利刃写入 %damage_amplification，供伤害链读取）
         SharpBladeEffect.recalculate(target);
     }
 

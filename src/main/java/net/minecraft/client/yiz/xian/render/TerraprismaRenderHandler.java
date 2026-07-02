@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.xian.render;
 
 import com.google.gson.*;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Camera;
@@ -80,7 +81,24 @@ public final class TerraprismaRenderHandler {
     static float renderPitchOff = 90f;
     static float renderRollOff  = 45f;
 
+    // ── 屏幕空间描边（边宽与距离无关）──
+    /** 描边边宽（像素），镜头远近不变 */
+    static float edgePixelWidth = 1.5f;
+    /** 描边方向数（屏幕 2D 圆等分；越大越圆滑，每个方向一次 draw call） */
+    static final int EDGE_DIRS = 12;
+
     private static long lastConfigMtime;
+
+    /**
+     * 描边外壳专用的私有 immediate 缓冲源。
+     * <p>Iris/Sodium 会把全局 {@code mc.renderBuffers().bufferSource()} 替换成
+     * {@code FullyBufferedMultiBufferSource}，其 {@code endBatch(RenderType)} 是 no-op，
+     * 所有半透明几何被延迟到 translucent 阶段重排渲染 → 外壳纯色画到不透明模型之后，
+     * 描边变成"整面填色"。这里用我们自己 new 的 vanilla {@link MultiBufferSource.BufferSource}，
+     * Iris 无法替换它，{@code endBatch} 会真正同步刷新，复刻原版"外壳立即先画 → 模型后画盖内部"的顺序。
+     */
+    private static final MultiBufferSource.BufferSource EDGE_BUFFER =
+        MultiBufferSource.immediate(new ByteBufferBuilder(512));
 
     private TerraprismaRenderHandler() {}
 
@@ -430,6 +448,9 @@ public final class TerraprismaRenderHandler {
         Set<UUID> alive = new HashSet<>();
         for (Player p : players) alive.add(p.getUUID());
         BLADES.keySet().retainAll(alive);
+        // 离线/退出游戏的玩家：一并清理其残留状态，防止静态 Map 内存泄漏。
+        DEAD_PLAYERS.retainAll(alive);
+        PLAYER_CMD_TARGET.keySet().retainAll(alive);
 
         for (Player player : players) {
             // 玩家死亡复活 → 重置所有剑状态和目标
@@ -438,7 +459,7 @@ public final class TerraprismaRenderHandler {
             if (DEAD_PLAYERS.remove(puid)) {
                 BLADES.remove(puid);
                 PLAYER_CMD_TARGET.remove(puid);
-                CMD_TARGET_EXPIRE.clear();
+                CMD_TARGET_EXPIRE.remove(puid);
             }
             // 扫描全部泰拉棱镜卷轴 → 总剑数 = 所有卷轴 NBT sword_count 之和
             List<ItemStack> scrolls = findAllScrolls(player);
@@ -806,7 +827,6 @@ public final class TerraprismaRenderHandler {
         stack.mulPose(Axis.XP.rotationDegrees((float)(pitchDeg - 90.0)));
         if (Math.abs(tiltAngle) > 0.01) stack.mulPose(Axis.YP.rotationDegrees((float) tiltAngle));
         stack.scale((float) scaleX, (float)(scaleY * swordLength), (float) scaleZ);
-        // 世界版边缘发光 — 8方向偏移 quad + 分级颜色
         renderWorldEdge(stack, buffer, scroll, player, sourceLevel);
         ri.renderStatic(scroll, ItemDisplayContext.GUI, glowLight, OverlayTexture.NO_OVERLAY,
             stack, buffer, player.level(), player.getId() * 100 + i);
@@ -877,16 +897,21 @@ public final class TerraprismaRenderHandler {
         ps.pushPose();
         ps.translate(-0.5f, -0.5f, -0.5f);
 
-        float off = 0.006f;
-        var dirs = net.minecraft.client.yiz.xian.render.glow.GlowEdgeBakedModel.getDirections(true);
         var edgeRt = net.minecraft.client.yiz.xian.render.glow.OutlineRenderType.GLOW_EDGE;
 
+        // 屏幕空间描边：沿屏幕 2D 圆 EDGE_DIRS 个方向各偏移 edgePixelWidth 像素，
+        // 顶点着色器按 NDC×w 偏移 → 边宽与距离无关、更锐利。
+        // uScreenOffset 是全局 uniform，无法跨方向批量，故每方向独立 flush。
+        // 用私有 EDGE_BUFFER（非 Iris 延迟源）→ endBatch 真正同步绘制，保证外壳先于不透明模型。
         if (buf instanceof MultiBufferSource.BufferSource bs) bs.endBatch();
-        var vc = buf.getBuffer(edgeRt);
 
-        for (var dir : dirs) {
-            ps.pushPose();
-            ps.translate(dir.x() * off, dir.y() * off, dir.z() * off);
+        for (int i = 0; i < EDGE_DIRS; i++) {
+            float ang = i * (Mth.TWO_PI / EDGE_DIRS);
+            float ox = (float) Math.cos(ang) * edgePixelWidth;
+            float oy = (float) Math.sin(ang) * edgePixelWidth;
+            shader.safeGetUniform("uScreenOffset").set(ox, oy);
+
+            var vc = EDGE_BUFFER.getBuffer(edgeRt);
             for (BakedModel pass : model.getRenderPasses(scroll, true)) {
                 for (var quad : pass.getQuads(null, null,
                         net.minecraft.util.RandomSource.create(),
@@ -896,10 +921,11 @@ public final class TerraprismaRenderHandler {
                         15728880, OverlayTexture.NO_OVERLAY, true);
                 }
             }
-            ps.popPose();
+            EDGE_BUFFER.endBatch(edgeRt); // 私有源 → 立即同步绘制（Iris 下全局源的 endBatch 是 no-op）
         }
+        // 复位：本着色器与 GUI 物品栏 ItemRendererGlowMixin 共用，避免污染其（PoseStack 偏移）路径
+        shader.safeGetUniform("uScreenOffset").set(0f, 0f);
 
-        if (buf instanceof MultiBufferSource.BufferSource bs) bs.endBatch(edgeRt);
         ps.popPose();
     }
 
@@ -929,25 +955,36 @@ public final class TerraprismaRenderHandler {
                 && !(st instanceof net.minecraft.world.entity.Mob mob && mob.getTarget() == sp)
                 && !(st.getLastHurtByMob() == sp)) continue;
 
-            // ① 假受伤动画（永远触发）
-            net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeHurt(st, sp);
-            net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeKnockback(st, b.velocity.x, b.velocity.z, 0.05);
+            // ══ 伤害结算逻辑（与 --main 版本完全一致，单一来源）══
+            // ① 假受伤动画（fakeHurt 也会触发实体移除 → C2ME 崩溃，故一并推迟）
+            // ② 原版 hurt → ③ trueDamage → ④ modifyHealth
+            Runnable dealDamage = () -> {
+                net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeHurt(st, sp);
+                net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeKnockback(st, b.velocity.x, b.velocity.z, 0.05);
+                // ② 按等级配置的原版 hurt
+                switch (spec.kind()) {
+                    case PHYSICAL -> st.hurt(sp.damageSources().playerAttack(sp), (float)spec.hurtDmg());
+                    case MAGIC     -> st.hurt(sp.damageSources().indirectMagic(sp, sp), (float)spec.hurtDmg());
+                    default -> {} // TRUE_DAMAGE / HYBRID 不走原版 hurt
+                }
 
-            // ② 按等级配置的原版 hurt
-            switch (spec.kind()) {
-                case PHYSICAL -> st.hurt(sp.damageSources().playerAttack(sp), (float)spec.hurtDmg());
-                case MAGIC     -> st.hurt(sp.damageSources().indirectMagic(sp, sp), (float)spec.hurtDmg());
-                default -> {} // TRUE_DAMAGE / HYBRID 不走原版 hurt
-            }
+                // ③ trueDamage
+                if (spec.trueDmg() > 0 && useTrueDamage)
+                    net.minecraft.client.yiz.api.YizModQZKAPI.trueDamage(st, (float)spec.trueDmg(), sp);
 
-            // ③ trueDamage
-            if (spec.trueDmg() > 0 && useTrueDamage)
-                net.minecraft.client.yiz.api.YizModQZKAPI.trueDamage(st, (float)spec.trueDmg(), sp);
+                // ④ modifyHealth
+                if (spec.modHp() > 0 && useModifyHealth) {
+                    float modDmg = (float)(spec.modHp() + st.getMaxHealth() * spec.modHpPctOfMax());
+                    net.minecraft.client.yiz.tool.health.EntityASMUtil.modifyHealth(st, -modDmg);
+                }
+            };
 
-            // ④ modifyHealth
-            if (spec.modHp() > 0 && useModifyHealth) {
-                float modDmg = (float)(spec.modHp() + st.getMaxHealth() * spec.modHpPctOfMax());
-                net.minecraft.client.yiz.tool.health.EntityASMUtil.modifyHealth(st, -modDmg);
+            // C2ME 兼容：渲染线程操作实体（包括 fakeHurt）会触发 C2ME 线程检查 → ConcurrentModificationException，
+            // 故全部推迟到服务端线程执行。伤害使用逻辑与 --main 一致，仅切换执行线程。
+            if (C2MECompat.LOADED) {
+                sl.getServer().execute(dealDamage);
+            } else {
+                dealDamage.run();
             }
 
             // 禁疗
@@ -959,8 +996,9 @@ public final class TerraprismaRenderHandler {
     }
 
     // ═══ 禁疗系统 ═══
+    // 注意：受禁疗的怪物死亡后其 UUID 仍会滞留，isAntiHealed 命中过期分支时会惰性 remove，
+    // 避免长时间运行后 Map 无限增长（内存泄漏）。
     private static final Map<UUID, Long> ANTI_HEAL_EXPIRE = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> ANTI_HEAL_CAP = new ConcurrentHashMap<>();
 
     private static void applyAntiHeal(UUID targetId, int addSec, int capSec) {
         long now = System.currentTimeMillis();
@@ -970,10 +1008,16 @@ public final class TerraprismaRenderHandler {
         ANTI_HEAL_EXPIRE.put(targetId, now + total);
     }
 
-    /** 检查目标是否处于禁疗状态（由 HealMixin 调用） */
+    /** 检查目标是否处于禁疗状态（由 HealMixin 调用）。过期条目会被惰性清理。 */
     public static boolean isAntiHealed(UUID targetId) {
         Long exp = ANTI_HEAL_EXPIRE.get(targetId);
-        return exp != null && System.currentTimeMillis() < exp;
+        if (exp == null) return false;
+        if (System.currentTimeMillis() >= exp) {
+            // 过期即清，防止静态 Map 累积所有受击怪物的 UUID
+            ANTI_HEAL_EXPIRE.remove(targetId);
+            return false;
+        }
+        return true;
     }
 
     /** 检测玩家左键攻击的实体，设为最高优先级指令目标（3秒过期） */

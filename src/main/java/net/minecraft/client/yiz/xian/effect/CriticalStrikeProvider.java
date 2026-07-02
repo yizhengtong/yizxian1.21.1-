@@ -32,6 +32,15 @@ public class CriticalStrikeProvider implements TargetFrameProvider {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return null;
 
+        // 检查服务端天赋状态：计时器为 0 表示天赋未激活或已被移除
+        int serverTimer = net.minecraft.client.yiz.api.PlayerDataAPI.get(
+            player, CriticalStrikeEffect.DATA_TIMER);
+        if (serverTimer <= 0) {
+            STATES.remove(player.getUUID());
+            LAST_FRAME.remove(player.getUUID());
+            return null;
+        }
+
         // 60° 锥扫描（复刻母模板）
         Vec3 eye = player.getEyePosition();
         var look = player.getLookAngle();

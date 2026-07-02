@@ -26,7 +26,19 @@ sourceSets.main.resources {
 }
 
 repositories {
+    // ========================================
+    // IMPORTANT: 前置库依赖配置
+    // ========================================
+    // 前置库项目路径: D:\ZM\yizgzq\yiz1.21.1
+    //
+    // 使用说明：
+    // 1. 游戏必须从当前项目（yizxian1.21.1）启动，不要从前置库启动
+    // 2. 修改前置库代码后，在前置库目录执行 `./gradlew build`
+    // 3. 在当前项目执行 `./gradlew runClient` 时会自动复制前置库 JAR 到 run/mods/
+    // 4. 前置库只负责代码更新和构建，不负责启动游戏
+    //
     // yiz-qzk library mod — built locally in sibling project
+    // Provides: API, effects, damage, health, UI framework
     flatDir { dirs '../yiz1.21.1/build/libs' }
 }
 
@@ -61,6 +73,9 @@ neoForge {
             // Disable compressed klass pointers so VTableReplace can
             // read full 64-bit klass addresses from object headers.
             jvmArguments.add '-XX:-UseCompressedClassPointers'
+
+            // Workaround for G1 GC crash on Intel 12th-gen hybrid architecture
+            jvmArguments.add '-XX:+UseParallelGC'
         }
 
         server {
@@ -122,8 +137,23 @@ configurations {
 }
 
 dependencies {
-    // yiz-qzk library mod — provides API, effects, damage, health, UI framework
+    // ========================================
+    // 前置库依赖声明
+    // ========================================
+    // yiz-qzk library mod (前置库)
+    // 项目路径: D:\ZM\yizgzq\yiz1.21.1
+    // 功能: provides API, effects, damage, health, UI framework
+    // 版本: 1.0.0
+    //
+    // 重要提示:
+    // - 修改前置库后，需要在其项目目录执行 `./gradlew build`
+    // - 执行 `./gradlew runClient` 时会自动复制最新 JAR 到 run/mods/
+    // - 游戏必须从当前项目启动，不要从前置库目录启动
     implementation "net.minecraft.client.yiz:yizmodqzk:1.0.0"
+
+    // ========================================
+    // 其他依赖示例（仅供参考，未启用）
+    // ========================================
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
@@ -200,8 +230,17 @@ var copyWindowCaptureDll = tasks.register('copyWindowCaptureDll', Copy) {
     into file('run')
 }
 
+// 将前置库 jar 复制到 run/mods，确保 runClient 时类路径可见
+var copyYizmodqzkJar = tasks.register('copyYizmodqzkJar', Copy) {
+    from('../yiz1.21.1/build/libs') {
+        include 'yizmodqzk-*.jar'
+        exclude '*-agent-*.jar'
+    }
+    into file('run/mods')
+}
+
 tasks.matching { it.name.startsWith('runClient') }.configureEach {
-    dependsOn copyWindowCaptureDll
+    dependsOn copyWindowCaptureDll, copyYizmodqzkJar
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
