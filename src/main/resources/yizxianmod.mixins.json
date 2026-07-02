@@ -13,11 +13,16 @@
     "KillBypassMixin",
     "AutoAttackMixin",
     "PlayerReachMixin",
-    "MixinInventoryMenu"
+    "MixinInventoryMenu",
+    "MixinTotemFromAccessory",
+    "MixinElytraFromAccessory",
+    "MixinPlayerAccessoryElytra"
   ],
   "client": [
     "AbstractContainerScreenAccessor",
-    "MixinInventoryScreen"
+    "MixinInventoryScreen",
+    "MixinLocalPlayerElytra",
+    "MixinElytraLayerRender"
   ],
   "injectors": {
     "defaultRequire": 1

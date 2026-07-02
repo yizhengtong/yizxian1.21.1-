@@ -1096,7 +1096,15 @@ public final class TerraprismaRenderHandler {
 
     private static List<ItemStack> findAllScrolls(Player player) {
         List<ItemStack> result = new ArrayList<>();
+        // 搜索背包
         for (ItemStack s : player.getInventory().items) {
+            if (s.getItem() instanceof net.minecraft.client.yiz.xian.item.TerraprismaScrollItem) result.add(s);
+        }
+        // 搜索饰品槽（未来会移除背包搜索，改为仅使用槽位）
+        net.minecraft.client.yiz.xian.api.AccessoryContainer container =
+            net.minecraft.client.yiz.xian.api.AccessoryContainer.get(player);
+        for (int i = 0; i < container.getSlotCount(); i++) {
+            ItemStack s = container.getItem(i);
             if (s.getItem() instanceof net.minecraft.client.yiz.xian.item.TerraprismaScrollItem) result.add(s);
         }
         return result;
