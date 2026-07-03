@@ -5,6 +5,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -40,12 +41,30 @@ public abstract class MixinElytraFromAccessory extends Entity {
         if (original) return true;
 
         if ((Object) this instanceof Player player) {
+            // 落地时尊重原版 false（停飞），否则会"永久飞"。
+            // 注意：不能加 isInWater —— 原版鞘翅入水仍保持滑翔，加了会导致本模组滑翔入水瞬间停飞。
+            if (player.onGround()) {
+                return false;
+            }
             AccessoryContainer container = AccessoryContainer.get(player);
+            boolean has = false;
+            String found = "none";
             for (int i = 0; i < container.getSlotCount(); i++) {
-                if (container.getItem(i).is(Items.ELYTRA)) {
-                    return true;
+                ItemStack s = container.getItem(i);
+                if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
+                    has = true;
+                    found = s.getItem().getClass().getSimpleName();
+                    break;
                 }
             }
+            // 采样日志：飞行中每 40 tick 打印容器实际状态，定位"没装却能飞"
+            if (player.tickCount % 40 == 0 && player.isFallFlying()) {
+                net.minecraft.client.yiz.xian.YizxianMod.LOGGER.info(
+                    "[ElytraMixin] player={} flying={} onGround={} containerHas={} found={} clientSide={}",
+                    player.getName().getString(), player.isFallFlying(), player.onGround(),
+                    has, found, player.level().isClientSide);
+            }
+            if (has) return true;
         }
         return false;
     }

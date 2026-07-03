@@ -1125,50 +1125,6 @@ public final class TerraprismaRenderHandler {
         return best;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 调试 HUD — 屏幕左侧显示每剑当前阶段
-    // ═══════════════════════════════════════════════════════════
-
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
-        var gui = event.getGuiGraphics();
-        var font = mc.font;
-        UUID puid = mc.player.getUUID();
-        BladeState[] blades = BLADES.get(puid);
-        if (blades == null || blades.length == 0) return;
-
-        int x = 4, y = 4;
-        int count = 0;
-        for (BladeState b : blades) {
-            if (b == null) continue;
-            count++;
-        }
-
-        gui.drawString(font, "§l§n 泰拉棱镜 [" + count + "/" + blades.length + "]", x, y, 0xFFFFFFFF);
-        y += 12;
-
-        // 按阶段分组显示
-        String[] phaseNames = {"A:翅膀", "B:上升", "C:俯冲", "D:椭圆", "E:穿刺", "F:归巢", "G:追击"};
-        String[] phaseKeys  = {"A","B","C","D","E","F","G"};
-        for (int pi = 0; pi < phaseKeys.length; pi++) {
-            StringBuilder sb = new StringBuilder(phaseNames[pi] + "  ");
-            int cnt = 0;
-            for (BladeState b : blades) {
-                if (b != null && phaseKeys[pi].equals(b.phaseLabel)) {
-                    if (cnt > 0) sb.append(",");
-                    if (cnt >= 12) { sb.append("…"); break; }
-                    sb.append(b.index);
-                    cnt++;
-                }
-            }
-            if (cnt == 0) continue;
-            int color = cnt > 10 ? 0xFF00FF00 : cnt > 5 ? 0xFFFFFF00 : cnt > 0 ? 0xFFFF8800 : 0xFFFF0000;
-            gui.drawString(font, sb.toString(), x, y, color);
-            y += 10;
-        }
-    }
-
     private static double pseudoRand(int index, int salt) {
         int h = index * 0x27d4eb2d + salt * 0x165667b1;
         h = (h ^ (h >>> 15)) * 0x2c1b3c6d;

@@ -30,6 +30,8 @@ import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 import net.minecraft.client.yiz.xian.item.WeaponCoreItem;
+import net.minecraft.client.yiz.xian.handler.BoostHandler;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.client.yiz.xian.realm.BreakthroughHandler;
 import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
 import net.minecraft.client.yiz.xian.realm.RealmStages;
@@ -90,6 +92,8 @@ public class YizxianMod {
         ITEMS.register("general_item", GeneralItemItem::new);
     public static final Supplier<Item> WEAPON_CORE =
         ITEMS.register("weapon_core", WeaponCoreItem::new);
+    public static final Supplier<Item> HEART_WINGS =
+        ITEMS.register("heart_wings", HeartWingsItem::new);
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
     public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
         StagedWeaponRegistration.<TerraprismaScrollItem>create(ITEMS, MODID, "terraprisma_scroll", 5)
@@ -135,6 +139,11 @@ public class YizxianMod {
 
         // ---- 饰品槽数据（服务器持久化 + copyOnDeath + 客户端同步） ----
         AccessoryContainer.registerDataKeys();
+        // 通用突进数据（心之翅等 BoostProvider 共享池）
+        net.minecraft.client.yiz.xian.api.BoostData.register();
+        // 注册突进来源（两端执行，供服务端 BoostHandler 与客户端 BoostHud 查询）
+        net.minecraft.client.yiz.xian.api.BoostRegistry.register(
+                net.minecraft.client.yiz.xian.api.HeartWingsBoostProvider.INSTANCE);
 
         // ---- 境界跨度 ----
         RealmStages.register();
@@ -160,11 +169,15 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
+
+        // 心之翅服务端：恢复 + 悬停锁死 + 落地归零
+        NeoForge.EVENT_BUS.addListener(BoostHandler::onPlayerTick);
     }
 
     /** 将本模组物品放入创造模式物品栏 */
     private void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.COMBAT) {
+            event.accept(HEART_WINGS.get());
             for (var s : TERRAPRISMA_SCROLLS) event.accept(s.get());
             for (var s : TERRA_BLADES) event.accept(s.get());
             for (var s : MURAMASAS) event.accept(s.get());
@@ -390,6 +403,12 @@ public class YizxianMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             RealmAttributeHandler.applyAttributes(serverPlayer);
+            // 饰品容器：玩家实体加载时附件已从存档 deserialize，但容器单例可能被更早的
+            // 调用（登录前的实体加载阶段某些 Mixin）以"还没 deserialize 的空附件"构造并缓存。
+            // 这里强制丢弃早期空实例并重新加载，确保读到存档里的饰品。
+            // 修复：重启游戏后服务端饰品容器为空 → 饰品丢失 + 突进恢复/消耗失效。
+            AccessoryContainer.discard(serverPlayer);
+            AccessoryContainer.get(serverPlayer);  // 构造 + loadFromPersist（读存档附件，恢复 _s）
         }
     }
 

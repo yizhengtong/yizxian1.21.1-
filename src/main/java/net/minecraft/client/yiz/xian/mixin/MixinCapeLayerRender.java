@@ -3,6 +3,7 @@ package net.minecraft.client.yiz.xian.mixin;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.layers.CapeLayer;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -40,7 +41,7 @@ public class MixinCapeLayerRender {
         AccessoryContainer container = AccessoryContainer.get(player);
         for (int i = 0; i < container.getSlotCount(); i++) {
             ItemStack s = container.getItem(i);
-            if (s.is(Items.ELYTRA)) return s;
+            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) return s;
         }
         return real;
     }

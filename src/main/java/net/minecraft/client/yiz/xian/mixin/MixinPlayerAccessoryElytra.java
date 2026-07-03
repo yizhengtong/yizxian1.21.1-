@@ -1,7 +1,9 @@
 package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,7 +37,8 @@ public abstract class MixinPlayerAccessoryElytra {
 
         AccessoryContainer container = AccessoryContainer.get(self);
         for (int i = 0; i < container.getSlotCount(); i++) {
-            if (container.getItem(i).is(Items.ELYTRA)) {
+            ItemStack s = container.getItem(i);
+            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
                 self.startFallFlying();
                 cir.setReturnValue(true);
                 return;

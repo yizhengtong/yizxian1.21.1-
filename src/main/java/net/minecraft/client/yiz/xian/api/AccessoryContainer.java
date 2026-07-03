@@ -63,7 +63,7 @@ public class AccessoryContainer extends SimpleContainer {
         this.player = player;
         this.clientSide = player.level().isClientSide;
         if (!clientSide) {
-            loadFromPersist();
+            loadFromPersist();   // 服务端从存档附件加载；客户端 _c 靠 Menu slot 同步，不读附件（避免与 slot 同步打架）
         }
     }
 
@@ -92,29 +92,42 @@ public class AccessoryContainer extends SimpleContainer {
         try {
             // 1) 加载槽位数量
             int count = getPersistedSlotCount();
+            // 2) 加载物品
+            String raw = PlayerDataAPI.get(player, DATA_KEY);
+            YizxianMod.LOGGER.info("[AccLoad] player={} clientSide={} persistedCount={} rawLen={} rawPreview={}",
+                player.getName().getString(), clientSide, count, raw == null ? -1 : raw.length(),
+                raw == null ? "null" : (raw.length() > 90 ? raw.substring(0, 90) + "..." : raw));
             if (count != getContainerSize()) {
                 resizeInternal(count);
             }
-            // 2) 加载物品
-            String raw = PlayerDataAPI.get(player, DATA_KEY);
             if (raw != null && !raw.isEmpty()) {
                 CompoundTag root = TagParser.parseTag(raw);
                 int persistedCount = root.getInt("Count");
                 ListTag list = root.getList("Slots", Tag.TAG_COMPOUND);
                 int n = Math.min(getContainerSize(), list.size());
+                int loaded = 0;
+                StringBuilder detail = new StringBuilder();
                 for (int i = 0; i < n; i++) {
                     final int idx = i;
                     CompoundTag ct = list.getCompound(i);
                     if (!ct.isEmpty()) {
-                        ItemStack.parse(player.registryAccess(), ct)
-                            .ifPresentOrElse(s -> setItem(idx, s), () -> setItem(idx, ItemStack.EMPTY));
+                        ItemStack parsed = ItemStack.parse(player.registryAccess(), ct).orElse(ItemStack.EMPTY);
+                        setItem(idx, parsed);
+                        if (!parsed.isEmpty()) {
+                            loaded++;
+                            detail.append(idx).append(":").append(parsed.getItem().getClass().getSimpleName()).append(" ");
+                        }
                     } else {
                         setItem(idx, ItemStack.EMPTY);
                     }
                 }
+                YizxianMod.LOGGER.info("[AccLoad] parsed Count={} slotsInList={} loadedNonEmpty={} detail={}",
+                    persistedCount, list.size(), loaded, detail);
+            } else {
+                YizxianMod.LOGGER.info("[AccLoad] raw empty -> container stays empty (no accessory data in persist)");
             }
         } catch (Exception e) {
-            YizxianMod.LOGGER.warn("Failed to load accessory container data for {}",
+            YizxianMod.LOGGER.warn("[AccLoad] Failed to load accessory container data for {}",
                 player.getName().getString(), e);
         } finally {
             loading = false;
@@ -164,6 +177,11 @@ public class AccessoryContainer extends SimpleContainer {
         } finally {
             loading = false;
         }
+    }
+
+    /** 服务端：把当前容器内容写回 PlayerDataAPI，触发网络同步到客户端。登录时主动调用一次。 */
+    public void syncToClient() {
+        saveToPersist();
     }
 
     /** 将当前槽位数量写回 PlayerDataAPI。 */
@@ -241,10 +259,22 @@ public class AccessoryContainer extends SimpleContainer {
 
     // ─── SimpleContainer 覆写 ────────────────────────────────
 
+    private int lastHwSlot = -2;  // 诊断：上次心之翅所在槽
+
     @Override
     public void setChanged() {
         super.setChanged();
         saveToPersist();
+        // 诊断：心之翅槽位变化时打印（定位"疯狂切换"）
+        int hw = -1;
+        for (int i = 0; i < getContainerSize(); i++) {
+            if (getItem(i).getItem() instanceof net.minecraft.client.yiz.xian.item.HeartWingsItem) { hw = i; break; }
+        }
+        if (hw != lastHwSlot) {
+            YizxianMod.LOGGER.info("[AccSC] player={} clientSide={} heartWingsSlot {}->{}",
+                player.getName().getString(), clientSide, lastHwSlot, hw);
+            lastHwSlot = hw;
+        }
     }
 
     // ─── PlayerDataAPI 注册 ──────────────────────────────────

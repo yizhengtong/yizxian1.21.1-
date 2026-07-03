@@ -2,7 +2,10 @@ package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.yiz.xian.YizxianMod;
+import net.minecraft.client.yiz.xian.api.BoostData;
+import net.minecraft.client.yiz.xian.api.BoostRegistry;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -40,14 +43,19 @@ public abstract class MixinLocalPlayerElytra {
 
         // 原版已能处理（胸甲槽直接有鞘翅）→ 不干预
         ItemStack chest = self.getItemBySlot(EquipmentSlot.CHEST);
-        if (chest.is(Items.ELYTRA)) return;
+        if (chest.is(Items.ELYTRA) || chest.getItem() instanceof HeartWingsItem) return;
 
         // 饰品槽有鞘翅 → 手动启动飞行
         AccessoryContainer container = AccessoryContainer.get(self);
         for (int i = 0; i < container.getSlotCount(); i++) {
-            if (container.getItem(i).is(Items.ELYTRA)) {
+            ItemStack s = container.getItem(i);
+            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
                 YizxianMod.LOGGER.info("[ElytraDiag] Starting flight from accessory slot {}", i);
                 self.startFallFlying();
+                // 起飞推进：由通用突进系统决定（心之翅等任意 BoostProvider）
+                if (BoostRegistry.hasActive(self)) {
+                    BoostData.onTakeoff(self);
+                }
                 self.connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(
                     self, net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
                 return;

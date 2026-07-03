@@ -16,7 +16,9 @@
     "MixinInventoryMenu",
     "MixinTotemFromAccessory",
     "MixinElytraFromAccessory",
-    "MixinPlayerAccessoryElytra"
+    "MixinPlayerAccessoryElytra",
+    "MixinHeartWingsProtection",
+    "MixinHoverLock"
   ],
   "client": [
     "AbstractContainerScreenAccessor",

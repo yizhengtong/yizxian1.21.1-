@@ -8,6 +8,8 @@ import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
 import net.minecraft.client.yiz.xian.command.YizxianClientCommand;
 import net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider;
+import net.minecraft.client.yiz.xian.handler.BoostHandler;
+import net.minecraft.client.yiz.xian.handler.HeartWingsKeyMappings;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
@@ -26,6 +28,13 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.yiz.xian.hud.BoostHud;
+import net.minecraft.client.yiz.xian.hud.HudEditorScreen;
+import net.minecraft.client.yiz.xian.hud.HudManager;
+import net.minecraft.client.yiz.xian.hud.HudPositionConfig;
+import org.lwjgl.glfw.GLFW;
 import org.joml.Vector4f;
 
 @Mod(value = YizxianMod.MODID, dist = Dist.CLIENT)
@@ -34,11 +43,17 @@ public class YizxianModClient {
         // 加载 Blockbench 动画
         BlockbenchAnimParser.load("/assets/yizxianmod/models/animations/attack.bbmodel");
 
+        // 心之翅可配置按键
+        modEventBus.addListener(HeartWingsKeyMappings::register);
+
         // 会心一击锁定框 — 高优先级，覆盖母效果
         TargetFrameManager.register(new CriticalStrikeProvider());
 
         // 客户端命令：/yizxian panel ...
         NeoForge.EVENT_BUS.addListener(YizxianClientCommand::onRegisterClientCommands);
+
+        // 心之翅推进：客户端按键（服务端恢复/悬停在 YizxianMod 中注册）
+        NeoForge.EVENT_BUS.addListener(BoostHandler::onClientTick);
 
         // 泰拉棱镜渲染 — 直接在世界中绘制浮游剑
         NeoForge.EVENT_BUS.addListener(TerraprismaRenderHandler::onRenderLevel);
@@ -55,8 +70,11 @@ public class YizxianModClient {
             }
         });
 
-        // 调试 HUD — 屏幕左侧显示每剑阶段 (A~G)
-        NeoForge.EVENT_BUS.addListener(TerraprismaRenderHandler::onRenderGui);
+        // ═══ HUD 系统：DEL+ALT 打开编辑器，RenderGuiEvent 分发 ═══
+        HudPositionConfig.load();
+        HudManager.register(new BoostHud());
+        NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(YizxianModClient::onHudKeyTick);
 
         // 物品着色器描边 — 复用前置库星空着色器系统
         ShaderManager.registerItemPredicate(
@@ -99,12 +117,27 @@ public class YizxianModClient {
             }
         });
 
-        // ═══ 饰品槽：服务器持久化变更后，客户端实时刷新单例 container 内容 ═══
-        // 保证容器外的内容变更（命令 / 其他模组 / 未来自动装备逻辑）也能立即在客户端显示。
-        PlayerDataAPI.setSyncCallback((player, key) -> {
-            if (AccessoryContainer.DATA_KEY.equals(key)) {
-                AccessoryContainer.get(player).refreshFromSync();
-            }
-        });
+        // 注意：不要在这里 setSyncCallback —— 它会覆盖前置库 NetworkHandler 注入的
+        // 网络同步回调（PlayerDataAPI.set → 发 SyncPlayerDataPayload 到客户端），
+        // 一旦覆盖，服务端所有 PlayerDataAPI 变更都不再同步到客户端（GUI 空、HUD 看不到恢复等）。
+        // 客户端 _c 容器的刷新改由 BoostHandler.onClientTick 定期 refreshFromSync 兜底。
+    }
+
+    // ── HUD 编辑器：DEL+ALT 边沿触发打开 ──
+
+    private static boolean delAltWasDown = false;
+
+    private static void onHudKeyTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        long window = mc.getWindow().getWindow();
+        boolean alt = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+                   || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
+        boolean del = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_DELETE);
+        boolean both = alt && del;
+        if (both && !delAltWasDown && mc.screen == null) {
+            mc.setScreen(new HudEditorScreen());
+        }
+        delAltWasDown = both;
     }
 }
