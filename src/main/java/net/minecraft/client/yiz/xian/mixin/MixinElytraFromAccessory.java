@@ -5,9 +5,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.client.yiz.xian.item.HeartWingsItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +17,8 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * {@code setSharedFlag(7, bool)} 的 bool 参数。
  * 原版判断胸甲槽无鞘翅 → 标志置 false → 本 Mixin 检查饰品槽有鞘翅 → 改为 true。</p>
  *
- * <p>参照 Caelus 的实现模式。不处理耐久度消耗。</p>
+ * <p>能力判定走统一入口 {@link AccessoryContainer#hasHeartWings}（双端跑：客户端查 _c、
+ * 服务端查 _s；内部 getIfExists 不创建空实例）。参照 Caelus 的实现模式，不处理耐久度消耗。</p>
  */
 @Mixin(LivingEntity.class)
 public abstract class MixinElytraFromAccessory extends Entity {
@@ -46,25 +44,8 @@ public abstract class MixinElytraFromAccessory extends Entity {
             if (player.onGround()) {
                 return false;
             }
-            AccessoryContainer container = AccessoryContainer.get(player);
-            boolean has = false;
-            String found = "none";
-            for (int i = 0; i < container.getSlotCount(); i++) {
-                ItemStack s = container.getItem(i);
-                if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
-                    has = true;
-                    found = s.getItem().getClass().getSimpleName();
-                    break;
-                }
-            }
-            // 采样日志：飞行中每 40 tick 打印容器实际状态，定位"没装却能飞"
-            if (player.tickCount % 40 == 0 && player.isFallFlying()) {
-                net.minecraft.client.yiz.xian.YizxianMod.LOGGER.info(
-                    "[ElytraMixin] player={} flying={} onGround={} containerHas={} found={} clientSide={}",
-                    player.getName().getString(), player.isFallFlying(), player.onGround(),
-                    has, found, player.level().isClientSide);
-            }
-            if (has) return true;
+            // 统一能力入口（getIfExists，不创建空实例并缓存）
+            if (AccessoryContainer.hasHeartWings(player)) return true;
         }
         return false;
     }

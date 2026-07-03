@@ -3,26 +3,37 @@ package net.minecraft.client.yiz.xian.api;
 import com.mojang.serialization.Codec;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.xian.YizxianMod;
+import net.minecraft.client.yiz.xian.item.HeartWingsItem;
+import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
- * 饰品槽容器 — 可变大小的 {@link SimpleContainer}，单例化（按玩家 UUID 缓存）。
+ * 饰品槽容器 — 可变大小的 {@link SimpleContainer}，单例化（按玩家 UUID + 逻辑侧缓存）。
  *
- * <h3>持久化</h3>
- * <p>服务器端 {@link #setChanged()} 时将全部槽位内容序列化为 SNBT 字符串，
- * 通过 {@link PlayerDataAPI} 写入玩家数据（自动持久化 + copyOnDeath + 客户端同步）。
- * 客户端容器通过原版 Container 同步协议获取内容，不主动写回持久化。</p>
+ * <h3>单一权威源（SSOT）架构</h3>
+ * <ul>
+ *   <li><b>服务端实例（{@code _s}）</b>是唯一可写权威源：装入/取出饰品、能力判定
+ *       （飞行维持、悬停、免伤、突进恢复）全部在服务端实例上做。</li>
+ *   <li><b>客户端实例（{@code _c}）</b>是只读镜像：<b>唯一</b>数据入口是
+ *       {@link #applyServerSnapshot(String)}（经 {@link SyncAccessoryPayload} 从服务端推送），
+ *       以及原版 Menu slot 同步（源头同是 {@code _s}，不冲突）。客户端<b>从不</b>读附件。</li>
+ *   <li>附件（{@link PlayerDataAPI}）仅作 {@code _s} 的持久化载体：登录时读一次、变更时写。</li>
+ * </ul>
  *
  * <h3>可变数量</h3>
  * <p>默认 9 槽。可通过 {@link #setSlotCount(int)} 动态增减。
@@ -30,9 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <h3>生命周期</h3>
  * <ul>
- *   <li>登录时：服务器构造 → {@link #loadFromPersist()} 加载初始内容</li>
- *   <li>运行时：物品放入/取出 → {@link #setChanged()} → 服务器端回写持久化</li>
- *   <li>退出时：{@link #discard(Player)} 清理单例缓存</li>
+ *   <li>登录/重生：服务端 discard+get → {@link #loadFromPersist()} 从附件加载 → 发 {@link SyncAccessoryPayload} 初始化客户端</li>
+ *   <li>运行时：物品放入/取出 → {@link #setChanged()} → 服务端写附件 + 发包推客户端</li>
+ *   <li>退出/断开：{@link #discard(Player)} 清理单例缓存（两端各自清理）</li>
  * </ul>
  */
 public class AccessoryContainer extends SimpleContainer {
@@ -62,8 +73,9 @@ public class AccessoryContainer extends SimpleContainer {
         super(DEFAULT_SLOT_COUNT);
         this.player = player;
         this.clientSide = player.level().isClientSide;
+        // 仅服务端从附件加载初始内容；客户端构造为空，等 applyServerSnapshot 填充
         if (!clientSide) {
-            loadFromPersist();   // 服务端从存档附件加载；客户端 _c 靠 Menu slot 同步，不读附件（避免与 slot 同步打架）
+            loadFromPersist();
         }
     }
 
@@ -79,79 +91,154 @@ public class AccessoryContainer extends SimpleContainer {
         return INSTANCES.computeIfAbsent(cacheKey(player), k -> new AccessoryContainer(player));
     }
 
-    /** 玩家退出/切换世界时清理单例，避免内存泄漏。 */
+    /** 只读访问：容器尚未创建时返回 null（避免过早创建空容器并缓存）。 */
+    public static AccessoryContainer getIfExists(Player player) {
+        return INSTANCES.get(cacheKey(player));
+    }
+
+    /** 玩家退出/切换世界/重生时清理单例，避免内存泄漏与脏数据。 */
     public static void discard(Player player) {
         INSTANCES.remove(cacheKey(player));
     }
 
-    // ─── 持久化加载/回写 ─────────────────────────────────────
+    // ─── 统一能力查询（取代各处重复的"遍历找心之翅"） ──────
 
-    /** 从 PlayerDataAPI 加载槽位内容。服务器端调用。 */
-    private void loadFromPersist() {
+    /**
+     * 玩家饰品槽是否装备了心之翅或原版鞘翅。
+     * <p>用 {@link #getIfExists}（不创建空实例），容器不存在时返回 false。
+     * 供飞行/突进/免伤/HUD 等所有能力判定统一调用。</p>
+     */
+    public static boolean hasHeartWings(Player player) {
+        return findElytra(player) != ItemStack.EMPTY;
+    }
+
+    /**
+     * 找到饰品槽里的心之翅或原版鞘翅 ItemStack（找不到返回 {@link ItemStack#EMPTY}）。
+     * <p>用 {@link #getIfExists}，不创建空实例。供渲染层返回真实物品栈用。</p>
+     */
+    public static ItemStack findElytra(Player player) {
+        AccessoryContainer c = getIfExists(player);
+        if (c == null) return ItemStack.EMPTY;
+        for (int i = 0; i < c.getContainerSize(); i++) {
+            ItemStack s = c.getItem(i);
+            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) return s;
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /** 通用查询：饰品槽是否存在满足谓词的物品。 */
+    public static boolean hasItem(Player player, Predicate<ItemStack> test) {
+        AccessoryContainer c = getIfExists(player);
+        if (c == null) return false;
+        for (int i = 0; i < c.getContainerSize(); i++) {
+            if (test.test(c.getItem(i))) return true;
+        }
+        return false;
+    }
+
+    // ─── 客户端：唯一数据入口 ───────────────────────────────
+
+    /**
+     * 客户端：用服务端推送的 SNBT 快照整体刷新本容器（只读镜像）。
+     * <p>这是客户端 {@code _c} 的<b>唯一</b>数据来源（配合原版 Menu slot 同步）。
+     * loading 标志屏蔽期间的回写，绝不触发 saveToPersist/发包。</p>
+     */
+    public void applyServerSnapshot(String snbt) {
+        if (!clientSide) return;   // 仅客户端
         loading = true;
         try {
-            // 1) 加载槽位数量
-            int count = getPersistedSlotCount();
-            // 2) 加载物品
-            String raw = PlayerDataAPI.get(player, DATA_KEY);
-            YizxianMod.LOGGER.info("[AccLoad] player={} clientSide={} persistedCount={} rawLen={} rawPreview={}",
-                player.getName().getString(), clientSide, count, raw == null ? -1 : raw.length(),
-                raw == null ? "null" : (raw.length() > 90 ? raw.substring(0, 90) + "..." : raw));
+            if (snbt == null || snbt.isEmpty()) return;
+            CompoundTag root = TagParser.parseTag(snbt);
+            int count = root.getInt("Count");
             if (count != getContainerSize()) {
                 resizeInternal(count);
             }
-            if (raw != null && !raw.isEmpty()) {
-                CompoundTag root = TagParser.parseTag(raw);
-                int persistedCount = root.getInt("Count");
-                ListTag list = root.getList("Slots", Tag.TAG_COMPOUND);
-                int n = Math.min(getContainerSize(), list.size());
-                int loaded = 0;
-                StringBuilder detail = new StringBuilder();
-                for (int i = 0; i < n; i++) {
-                    final int idx = i;
-                    CompoundTag ct = list.getCompound(i);
-                    if (!ct.isEmpty()) {
-                        ItemStack parsed = ItemStack.parse(player.registryAccess(), ct).orElse(ItemStack.EMPTY);
-                        setItem(idx, parsed);
-                        if (!parsed.isEmpty()) {
-                            loaded++;
-                            detail.append(idx).append(":").append(parsed.getItem().getClass().getSimpleName()).append(" ");
-                        }
-                    } else {
-                        setItem(idx, ItemStack.EMPTY);
-                    }
+            ListTag list = root.getList("Slots", Tag.TAG_COMPOUND);
+            int n = Math.min(getContainerSize(), list.size());
+            for (int i = 0; i < n; i++) {
+                CompoundTag ct = list.getCompound(i);
+                if (!ct.isEmpty()) {
+                    ItemStack parsed = ItemStack.parse(player.registryAccess(), ct).orElse(ItemStack.EMPTY);
+                    setItem(i, parsed);
+                } else {
+                    setItem(i, ItemStack.EMPTY);
                 }
-                YizxianMod.LOGGER.info("[AccLoad] parsed Count={} slotsInList={} loadedNonEmpty={} detail={}",
-                    persistedCount, list.size(), loaded, detail);
-            } else {
-                YizxianMod.LOGGER.info("[AccLoad] raw empty -> container stays empty (no accessory data in persist)");
             }
         } catch (Exception e) {
-            YizxianMod.LOGGER.warn("[AccLoad] Failed to load accessory container data for {}",
+            YizxianMod.LOGGER.warn("Failed to apply accessory snapshot for {}",
                 player.getName().getString(), e);
         } finally {
             loading = false;
         }
     }
 
-    /** 将当前槽位内容写回 PlayerDataAPI。服务器端调用。 */
+    // ─── 服务端：持久化加载/回写 ───────────────────────────
+
+    /** 从 PlayerDataAPI 加载槽位内容。仅服务端构造时调用。 */
+    private void loadFromPersist() {
+        loading = true;
+        try {
+            int count = getPersistedSlotCount();
+            String raw = PlayerDataAPI.get(player, DATA_KEY);
+            if (count != getContainerSize()) {
+                resizeInternal(count);
+            }
+            if (raw != null && !raw.isEmpty()) {
+                CompoundTag root = TagParser.parseTag(raw);
+                ListTag list = root.getList("Slots", Tag.TAG_COMPOUND);
+                int n = Math.min(getContainerSize(), list.size());
+                for (int i = 0; i < n; i++) {
+                    CompoundTag ct = list.getCompound(i);
+                    if (!ct.isEmpty()) {
+                        ItemStack parsed = ItemStack.parse(player.registryAccess(), ct).orElse(ItemStack.EMPTY);
+                        setItem(i, parsed);
+                    } else {
+                        setItem(i, ItemStack.EMPTY);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            YizxianMod.LOGGER.warn("Failed to load accessory container data for {}",
+                player.getName().getString(), e);
+        } finally {
+            loading = false;
+        }
+    }
+
+    /**
+     * 服务端：从附件重新加载内容（登录/重生时调用）。
+     * <p><b>关键</b>：复用既有实例（{@code get}），不 discard 换新实例 ——
+     * 玩家的 InventoryMenu slot 已绑定到既有实例，discard+换新会导致 Menu slot 指向旧实例、
+     * INSTANCES 指向新实例的"双实例"脱节（表现为取出后还能飞 / 闪烁）。</p>
+     */
+    public void reloadFromPersist() {
+        if (clientSide) return;
+        loadFromPersist();
+    }
+
+    /** 序列化当前槽位为 SNBT（服务端权威快照）。供持久化与推送客户端共用。 */
+    public String getSnapshotSnbt() {
+        CompoundTag root = new CompoundTag();
+        root.putInt("Count", getContainerSize());
+        ListTag list = new ListTag();
+        for (int i = 0; i < getContainerSize(); i++) {
+            ItemStack stack = getItem(i);
+            // ItemStack.save() 空栈抛异常，空栈只存空 CompoundTag
+            if (stack.isEmpty()) {
+                list.add(new CompoundTag());
+            } else {
+                list.add(stack.save(player.registryAccess(), new CompoundTag()));
+            }
+        }
+        root.put("Slots", list);
+        return root.toString();
+    }
+
+    /** 将当前槽位内容写回 PlayerDataAPI（持久化）。仅服务端。 */
     private void saveToPersist() {
         if (loading || clientSide) return;
         try {
-            CompoundTag root = new CompoundTag();
-            root.putInt("Count", getContainerSize());
-            ListTag list = new ListTag();
-            for (int i = 0; i < getContainerSize(); i++) {
-                ItemStack stack = getItem(i);
-                // ItemStack.save() 空栈抛异常，空栈只存空 CompoundTag
-                if (stack.isEmpty()) {
-                    list.add(new CompoundTag());
-                } else {
-                    list.add(stack.save(player.registryAccess(), new CompoundTag()));
-                }
-            }
-            root.put("Slots", list);
-            PlayerDataAPI.set(player, DATA_KEY, root.toString());
+            PlayerDataAPI.set(player, DATA_KEY, getSnapshotSnbt());
         } catch (Exception e) {
             YizxianMod.LOGGER.warn("Failed to save accessory container data for {}",
                 player.getName().getString(), e);
@@ -162,26 +249,6 @@ public class AccessoryContainer extends SimpleContainer {
     private int getPersistedSlotCount() {
         Integer v = PlayerDataAPI.get(player, COUNT_KEY);
         return (v != null && v > 0) ? v : DEFAULT_SLOT_COUNT;
-    }
-
-    /**
-     * 客户端：PlayerDataAPI 同步到达后刷新本容器内容。
-     * <p>用于处理容器外部的数据变更（命令 / 其他模组 / 未来自动装备逻辑）。
-     * 与原版 slot 同步共存：二者最终收敛到服务器权威值。</p>
-     */
-    public void refreshFromSync() {
-        if (!clientSide) return;
-        loading = true;
-        try {
-            loadFromPersist();
-        } finally {
-            loading = false;
-        }
-    }
-
-    /** 服务端：把当前容器内容写回 PlayerDataAPI，触发网络同步到客户端。登录时主动调用一次。 */
-    public void syncToClient() {
-        saveToPersist();
     }
 
     /** 将当前槽位数量写回 PlayerDataAPI。 */
@@ -220,10 +287,11 @@ public class AccessoryContainer extends SimpleContainer {
             }
             resizeInternal(newCount);
             saveSlotCount();
-            saveToPersist();
         } finally {
             loading = false;
         }
+        // 触发持久化 accessory_items + 推客户端（loading 已恢复 false）
+        setChanged();
     }
 
     /** 获取当前槽位数量。 */
@@ -237,10 +305,7 @@ public class AccessoryContainer extends SimpleContainer {
         for (int i = 0; i < getContainerSize(); i++) {
             old.add(getItem(i).copy());
         }
-        // SimpleContainer 的 items 字段是 private，无法直接访问。
-        // 通过 clearContent + 重建 via addItem 的方式代替。
-        // 最简做法：直接用反射修改父类的 items 字段，或构造新实例替换结构。
-        // 这里采用反射方式，SimpleContainer 内部就是 NonNullList<ItemStack>。
+        // SimpleContainer 的 items 字段是 private，通过反射替换。
         try {
             java.lang.reflect.Field field = SimpleContainer.class.getDeclaredField("items");
             field.setAccessible(true);
@@ -252,28 +317,24 @@ public class AccessoryContainer extends SimpleContainer {
             field.set(this, newItems);
         } catch (Exception e) {
             YizxianMod.LOGGER.error("Failed to resize AccessoryContainer via reflection", e);
-            // fallback: 重建容器（交换单例缓存中的实例）
             throw new RuntimeException("AccessoryContainer resize failed", e);
         }
     }
 
-    // ─── SimpleContainer 覆写 ────────────────────────────────
+    // ─── SimpleContainer 覆写：SSOT 写入 + 推客户端 ─────────
 
-    private int lastHwSlot = -2;  // 诊断：上次心之翅所在槽
-
+    /**
+     * 饰品内容变更的统一入口（slot setItem / clear / add 触发）。
+     * <p>服务端：持久化到附件 + 发 {@link SyncAccessoryPayload} 推客户端。
+     * 客户端：early-return（只读镜像，绝不持久化或发包）。</p>
+     */
     @Override
     public void setChanged() {
         super.setChanged();
+        if (clientSide || loading) return;
         saveToPersist();
-        // 诊断：心之翅槽位变化时打印（定位"疯狂切换"）
-        int hw = -1;
-        for (int i = 0; i < getContainerSize(); i++) {
-            if (getItem(i).getItem() instanceof net.minecraft.client.yiz.xian.item.HeartWingsItem) { hw = i; break; }
-        }
-        if (hw != lastHwSlot) {
-            YizxianMod.LOGGER.info("[AccSC] player={} clientSide={} heartWingsSlot {}->{}",
-                player.getName().getString(), clientSide, lastHwSlot, hw);
-            lastHwSlot = hw;
+        if (player instanceof ServerPlayer serverPlayer) {
+            PacketDistributor.sendToPlayer(serverPlayer, new SyncAccessoryPayload(getSnapshotSnbt()));
         }
     }
 

@@ -39,6 +39,7 @@ public abstract class MixinInventoryMenu extends AbstractContainerMenu {
         }
         if (owner == null) return;
 
+        // _c 由 SyncAccessoryPayload 填充 + 原版 sendInitialData 同步，打开背包时无需再从附件读
         AccessoryContainer container = AccessoryContainer.get(owner);
         for (int i = 0; i < container.getSlotCount(); i++) {
             this.addSlot(new AccessorySlot(container, i, 8 + i * 18, ACCESSORY_Y));

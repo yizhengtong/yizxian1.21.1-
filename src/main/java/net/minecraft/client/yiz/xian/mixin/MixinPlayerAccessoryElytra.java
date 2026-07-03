@@ -1,10 +1,7 @@
 package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
-import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,6 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *   <li><b>本 Mixin</b> — 服务端：接收 START_FALL_FLYING 数据包后，确认饰品槽有鞘翅允许飞行</li>
  *   <li>{@link MixinElytraFromAccessory} — 双端：维持飞行标志不被 updateFallFlying 关掉</li>
  * </ul>
+ *
+ * <p>能力判定走统一入口 {@link AccessoryContainer#hasHeartWings}（服务端查 _s）。</p>
  */
 @Mixin(Player.class)
 public abstract class MixinPlayerAccessoryElytra {
@@ -35,14 +34,9 @@ public abstract class MixinPlayerAccessoryElytra {
         if (self.isInWater() || self.hasEffect(net.minecraft.world.effect.MobEffects.LEVITATION))
             return;
 
-        AccessoryContainer container = AccessoryContainer.get(self);
-        for (int i = 0; i < container.getSlotCount(); i++) {
-            ItemStack s = container.getItem(i);
-            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
-                self.startFallFlying();
-                cir.setReturnValue(true);
-                return;
-            }
+        if (AccessoryContainer.hasHeartWings(self)) {
+            self.startFallFlying();
+            cir.setReturnValue(true);
         }
     }
 }

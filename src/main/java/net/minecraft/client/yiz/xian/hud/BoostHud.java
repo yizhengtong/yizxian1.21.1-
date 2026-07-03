@@ -10,16 +10,21 @@ import net.minecraft.world.entity.player.Player;
 /**
  * 突进 HUD（首个 {@link HudElement}）。
  *
- * <p>推进次数以横排的圈圈表示，每个圈圈代表一次推进的"充能槽"：
- * <ul>
- *   <li>已恢复完成的圈圈（第 0..boosts-1 个）→ 定格满帧（第 6 帧）</li>
- *   <li>正在恢复的那个（第 boosts 个，若 boosts &lt; max）→ 充能涌动动画</li>
- *   <li>全满（boosts &gt;= max）→ 所有圈圈定格</li>
- * </ul>
- * 数据来自通用 {@link BoostData}（与具体来源解耦）。</p>
+ * <h3>展示规则</h3>
+ * <ol>
+ *   <li>boosts == 0：不显示任何圈圈（第 1 个突进后台静默恢复）</li>
+ *   <li>boosts == 1：显示 1 个圈圈，在其上播放第 2 个突进的恢复动画</li>
+ *   <li>boosts == max：显示 max 个圈圈，全部定格满帧</li>
+ * </ol>
+ * 消耗后瞬间回退：2→1 时只剩 1 个圈且动画从 0 开始，1→0 时全部消失。
+ *
+ * <p>数据来自通用 {@link BoostData}（与具体来源解耦）。</p>
  *
  * <p>纹理 {@code boost_glyph.png} 为 8×56 纵向 7 帧图集（每帧 8×8，MC 动画纹理标准）。
- * 元素以 1:1 绘制 8×8 帧，默认 scale=2.0。</p>
+ * 帧位置由 {@link BoostData#getRegenProgress} 驱动（0.0 → 帧 0，1.0 → 帧 6），
+ * 动画速度与当前 provider 的恢复间隔自然绑定。</p>
+ *
+ * <p>元素以 1:1 绘制 8×8 帧，默认 scale=2.0。</p>
  */
 public class BoostHud extends HudElement {
 
@@ -30,7 +35,7 @@ public class BoostHud extends HudElement {
     private static final int FRAME = 8;          // 每帧像素（8×8）
     private static final int ATLAS_W = 8;        // 纵向帧条：宽 = 单帧宽
     private static final int ATLAS_H = 56;       // 纵向帧条：高 = 单帧高 × 帧数
-    private static final int FRAMETIME = 6;      // 充能动画每帧 tick
+    private static final int EDIT_FRAMETIME = 6; // 编辑器预览用固定帧速
     private static final int ICON = 8;           // 单个圈圈逻辑尺寸
     private static final int GAP = 2;            // 圈圈间距
 
@@ -54,29 +59,32 @@ public class BoostHud extends HudElement {
         Minecraft mc = Minecraft.getInstance();
         int boosts;
         int max;
+        int recoveringFrame;
 
         if (editMode) {
-            // 编辑器内用示例数据强制画，无视运行时条件
+            // 编辑器内用示例数据和固定帧速预览
             boosts = 2;
             max = BoostData.DEFAULT_MAX;
+            long time = mc.level != null ? mc.level.getGameTime() : 0L;
+            recoveringFrame = (int) ((time / EDIT_FRAMETIME) % FRAMES);
         } else {
             Player player = mc.player;
             if (player == null) return;
             if (BoostRegistry.getActive(player) == null) return;   // 无突进来源不画
             boosts = BoostData.getBoosts(player);
             max = BoostData.currentMax(player);
+            if (boosts == 0) return;   // 第 1 个突进恢复中：不显示任何圈圈，后台静默
+            // 恢复动画帧：progress 0.0→帧0，progress 1.0→帧6
+            float progress = BoostData.getRegenProgress(player);
+            recoveringFrame = Math.min((int) (progress * FRAMES), FRAMES - 1);
         }
 
-        // 充能中圈圈的动画帧（按时间从上到下循环）
-        long time = mc.level != null ? mc.level.getGameTime() : 0L;
-        int chargeFrame = (int) ((time / FRAMETIME) % FRAMES);
-
-        // 第 0..boosts-1 个：已恢复 → 定格满帧；第 boosts 个（若 < max）：正在恢复 → 充能动画
-        int slots = Math.min(boosts + 1, max);
-        for (int i = 0; i < slots; i++) {
+        // 仅渲染已恢复的圈圈（boosts 个），最后一个圈圈在 boosts < max 时播放恢复动画
+        for (int i = 0; i < boosts; i++) {
             int x = i * (ICON + GAP);
-            int frame = (i < boosts) ? (FRAMES - 1) : chargeFrame;
-            // 纵向帧条取第 frame 帧：uOffset=0, vOffset=frame*8
+            boolean isLast = (i == boosts - 1);
+            boolean needAnim = isLast && boosts < max;
+            int frame = needAnim ? recoveringFrame : (FRAMES - 1);
             g.blit(TEX, x, 0, 0, frame * FRAME, FRAME, FRAME, ATLAS_W, ATLAS_H);
         }
     }

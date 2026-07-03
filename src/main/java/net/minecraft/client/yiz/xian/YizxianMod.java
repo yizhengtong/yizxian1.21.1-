@@ -32,6 +32,10 @@ import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 import net.minecraft.client.yiz.xian.item.WeaponCoreItem;
 import net.minecraft.client.yiz.xian.handler.BoostHandler;
 import net.minecraft.client.yiz.xian.item.HeartWingsItem;
+import net.minecraft.client.yiz.xian.network.C2SBoostPayload;
+import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.minecraft.client.yiz.xian.realm.BreakthroughHandler;
 import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
 import net.minecraft.client.yiz.xian.realm.RealmStages;
@@ -119,6 +123,22 @@ public class YizxianMod {
         // ---- 物品注册 ----
         ITEMS.register(modEventBus);
 
+        // ---- 网络包：C2S 突进请求 + S2C 饰品容器同步 ----
+        modEventBus.addListener(RegisterPayloadHandlersEvent.class, event -> {
+            var registrar = event.registrar(MODID);
+            registrar.playToServer(
+                C2SBoostPayload.TYPE,
+                C2SBoostPayload.STREAM_CODEC,
+                C2SBoostPayload::handle
+            );
+            // 服务端 → 客户端：推送饰品容器权威快照（_c 唯一数据入口）
+            registrar.playToClient(
+                SyncAccessoryPayload.TYPE,
+                SyncAccessoryPayload.STREAM_CODEC,
+                SyncAccessoryPayload::handle
+            );
+        });
+
         // ---- 创造模式物品栏 ----
         modEventBus.addListener(this::onBuildCreativeTab);
 
@@ -166,6 +186,7 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerRespawn);
         NeoForge.EVENT_BUS.addListener(this::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
@@ -403,13 +424,27 @@ public class YizxianMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             RealmAttributeHandler.applyAttributes(serverPlayer);
-            // 饰品容器：玩家实体加载时附件已从存档 deserialize，但容器单例可能被更早的
-            // 调用（登录前的实体加载阶段某些 Mixin）以"还没 deserialize 的空附件"构造并缓存。
-            // 这里强制丢弃早期空实例并重新加载，确保读到存档里的饰品。
-            // 修复：重启游戏后服务端饰品容器为空 → 饰品丢失 + 突进恢复/消耗失效。
-            AccessoryContainer.discard(serverPlayer);
-            AccessoryContainer.get(serverPlayer);  // 构造 + loadFromPersist（读存档附件，恢复 _s）
+            // 复用既有 _s 实例（InventoryMenu 的 slot 已绑定它），只 reload 内容。
+            // 绝不 discard+换实例 —— 否则 Menu slot 指向旧实例、INSTANCES 指向新实例，
+            // 表现为"取出后还能飞 / 槽位空 / 放入闪烁"的双实例脱节。
+            AccessoryContainer container = AccessoryContainer.get(serverPlayer);
+            container.reloadFromPersist();
+            syncAccessoryToClient(serverPlayer, container);
         }
+    }
+
+    /** 重生：附件 copyOnDeath 已复制 accessory_items，复用 _s 实例 reload（不 discard，避免 Menu 脱节）。 */
+    private void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+            AccessoryContainer container = AccessoryContainer.get(serverPlayer);
+            container.reloadFromPersist();
+            syncAccessoryToClient(serverPlayer, container);
+        }
+    }
+
+    /** 把服务端 _s 权威快照推给客户端 _c（登录/重生/变更时调用）。 */
+    private static void syncAccessoryToClient(ServerPlayer serverPlayer, AccessoryContainer container) {
+        PacketDistributor.sendToPlayer(serverPlayer, new SyncAccessoryPayload(container.getSnapshotSnbt()));
     }
 
     /** 玩家退出：清理会心一击的运行时状态与修饰符，避免下次登录残留脏数据。 */

@@ -9,23 +9,25 @@ import net.minecraft.world.entity.player.Player;
  *
  * <h3>突进逻辑</h3>
  * <ol>
- *   <li>起飞时 +1（仅当有 active {@link BoostProvider}）</li>
- *   <li>TAB 键消耗 1 → 沿视线推进</li>
- *   <li>自动恢复：每 {@link #DEFAULT_REGEN} tick +1（上限由当前 active provider 决定）</li>
- *   <li>落地时：归零</li>
+ *   <li>TAB 键消耗 1 → 沿视线推进（消耗后进入 {@link #COOLDOWN_TICKS} tick 冷却）</li>
+ *   <li>自动恢复：按 provider 间隔 tick +1（充能唯一来源，不受起飞/落地影响）</li>
+ *   <li>充能跨飞行/落地持续保留</li>
  * </ol>
  *
- * <p>PlayerDataAPI key：{@code yizxianmod:boost} / {@code yizxianmod:boost_regen}。</p>
+ * <p>PlayerDataAPI key：{@code yizxianmod:boost} / {@code yizxianmod:boost_regen} / {@code yizxianmod:boost_cooldown}。</p>
  */
 public final class BoostData {
 
     public static final String KEY_BOOST = "yizxianmod:boost";
     public static final String KEY_REGEN = "yizxianmod:boost_regen";
+    public static final String KEY_COOLDOWN = "yizxianmod:boost_cooldown";
 
     /** 默认推进上限。 */
     public static final int DEFAULT_MAX = 3;
     /** 默认恢复间隔（tick，40 = 2 秒）。 */
     public static final int DEFAULT_REGEN = 40;
+    /** 使用后冷却（tick，30 = 1.5 秒），期间无法再次消耗突进。 */
+    public static final int COOLDOWN_TICKS = 30;
 
     private BoostData() {}
 
@@ -33,6 +35,7 @@ public final class BoostData {
     public static void register() {
         PlayerDataAPI.register(KEY_BOOST, Codec.INT, 0);
         PlayerDataAPI.register(KEY_REGEN, Codec.INT, DEFAULT_REGEN);
+        PlayerDataAPI.register(KEY_COOLDOWN, Codec.INT, 0);
     }
 
     // ── 当前 active provider 的数值（无 provider 时用默认）──
@@ -76,52 +79,65 @@ public final class BoostData {
         return 1f - (float) getRegenTicks(player) / interval;
     }
 
+    // ── 冷却计时 ──
+
+    public static int getCooldown(Player player) {
+        Integer v = PlayerDataAPI.get(player, KEY_COOLDOWN);
+        return v != null ? v : 0;
+    }
+
+    public static void setCooldown(Player player, int ticks) {
+        PlayerDataAPI.set(player, KEY_COOLDOWN, Math.max(0, ticks));
+    }
+
+    /** 冷却进度 0.0 → 1.0（1.0 = 冷却完毕可用）。 */
+    public static float getCooldownProgress(Player player) {
+        int cd = getCooldown(player);
+        if (cd <= 0) return 1f;
+        return 1f - (float) cd / COOLDOWN_TICKS;
+    }
+
     // ── 生命周期 ──
 
-    /** 每 tick 调用：自动恢复。 */
+    /** 每 tick 调用：自动恢复 + 冷却递减。 */
     public static void tickRegen(Player player) {
         int cur = getBoosts(player);
         int max = currentMax(player);
         int interval = currentInterval(player);
-        int regen = getRegenTicks(player);
-        // 采样日志：每 20 tick 打印一次倒计时，定位恢复间隔
-        if (player.tickCount % 20 == 0) {
-            net.minecraft.client.yiz.xian.YizxianMod.LOGGER.info(
-                "[BoostRegen] player={} cur={}/{} regen={}/{} interval={}",
-                player.getName().getString(), cur, max, regen, interval, interval);
-        }
+
+        // 冷却递减
+        int cd = getCooldown(player);
+        if (cd > 0) setCooldown(player, cd - 1);
+
         if (cur >= max) return;
-        regen = regen - 1;
+        int regen = getRegenTicks(player) - 1;
         if (regen <= 0) {
             setBoosts(player, cur + 1);
             setRegenTicks(player, interval);
-            net.minecraft.client.yiz.xian.YizxianMod.LOGGER.info(
-                "[BoostRegen] player={} recovered +1 -> {}/{}", player.getName().getString(), cur + 1, max);
         } else {
             setRegenTicks(player, regen);
         }
     }
 
-    /** 起飞时调用：+1（不超上限）。 */
+    /** 起飞时调用（当前版本已取消起飞 +1，充能仅由恢复计时驱动）。 */
     public static void onTakeoff(Player player) {
-        int cur = getBoosts(player);
-        if (cur < currentMax(player)) {
-            setBoosts(player, cur + 1);
-        }
+        // 不再 +1。充能仅通过 tickRegen 自动恢复。
     }
 
-    /** 落地时调用：归零。 */
+    /** 落地时调用（当前版本已取消落地归零，充能跨飞行保留）。 */
     public static void onLand(Player player) {
-        if (getBoosts(player) > 0) {
-            setBoosts(player, 0);
-        }
+        // 不再归零。充能跨飞行/落地持续保留。
     }
 
-    /** TAB 键触发：消耗 1 次推进。 */
+    /** 消耗 1 次推进（需不在冷却中且有可用充能），同时重置恢复计时。 */
     public static boolean tryConsume(Player player) {
+        if (getCooldown(player) > 0) return false;
         int cur = getBoosts(player);
         if (cur <= 0) return false;
         PlayerDataAPI.set(player, KEY_BOOST, cur - 1);
+        setCooldown(player, COOLDOWN_TICKS);
+        // 重置恢复计时，防止消耗后立即被 tickRegen 补回
+        setRegenTicks(player, currentInterval(player));
         return true;
     }
 }

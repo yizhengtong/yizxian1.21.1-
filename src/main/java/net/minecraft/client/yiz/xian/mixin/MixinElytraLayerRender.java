@@ -45,12 +45,10 @@ public class MixinElytraLayerRender {
                                           float d, float e, float f, float g, float h, float i, CallbackInfo ci) {
         this.yizxian$isHeartWings = false;
         if (entity instanceof net.minecraft.world.entity.player.Player player) {
-            AccessoryContainer container = AccessoryContainer.get(player);
-            for (int j = 0; j < container.getSlotCount(); j++) {
-                if (container.getItem(j).getItem() instanceof HeartWingsItem) {
-                    this.yizxian$isHeartWings = true;
-                    return;
-                }
+            // 心之翅纹理判定（区分于普通鞘翅）：查饰品槽是否装备心之翅
+            ItemStack elytra = AccessoryContainer.findElytra(player);
+            if (elytra.getItem() instanceof HeartWingsItem) {
+                this.yizxian$isHeartWings = true;
             }
         }
     }
@@ -67,13 +65,11 @@ public class MixinElytraLayerRender {
         if (!real.isEmpty()) return real;
 
         if (entity instanceof net.minecraft.world.entity.player.Player player) {
-            AccessoryContainer c = AccessoryContainer.get(player);
-            for (int i = 0; i < c.getSlotCount(); i++) {
-                ItemStack s = c.getItem(i);
-                if (s.is(Items.ELYTRA)) return s;
-                // 心之翅 → 返回假的原版鞘翅，让 vanilla 的 is(Items.ELYTRA) 检查通过
-                // 实际纹理由下方的 @Redirect armorsCutoutNoCull 替换为自定义纹理
-                if (s.getItem() instanceof HeartWingsItem) return new ItemStack(Items.ELYTRA);
+            ItemStack accessory = AccessoryContainer.findElytra(player);
+            if (accessory != ItemStack.EMPTY) {
+                // 心之翅 → 返回假原版鞘翅骗过 vanilla is(ELYTRA) 检查；
+                // 真纹理由下方的 @Redirect armorsCutoutNoCull 替换为自定义纹理
+                return accessory.getItem() instanceof HeartWingsItem ? new ItemStack(Items.ELYTRA) : accessory;
             }
         }
         return real;

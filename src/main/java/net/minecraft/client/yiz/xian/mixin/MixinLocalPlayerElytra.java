@@ -1,9 +1,6 @@
 package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.yiz.xian.YizxianMod;
-import net.minecraft.client.yiz.xian.api.BoostData;
-import net.minecraft.client.yiz.xian.api.BoostRegistry;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
 import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.effect.MobEffects;
@@ -17,13 +14,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * 客户端侧：在 {@code LocalPlayer.aiStep()} 头部检测饰品槽中的鞘翅，
- * 满足条件则直接调用 {@code startFallFlying()} 启动滑翔。
- *
- * <p>不依赖 {@code INVOKE_ASSIGN} 或 {@code @ModifyVariable}——
- * 在 {@code aiStep} 最开始就判断，手动复制原版的双跳检测逻辑。</p>
+ * 满足条件则自动展开滑翔（原版风格，无需按跳跃键）。
  *
  * <p>飞行一旦启动，由 {@link MixinElytraFromAccessory} 的 {@code updateFallFlying}
  * {@code @ModifyArg} 维持飞行标志，不会被关掉。</p>
+ *
+ * <p>能力判定走统一入口 {@link AccessoryContainer#hasHeartWings}（客户端查 _c）。
+ * 不再有 fallback refreshFromSync —— 客户端 _c 是只读镜像，由 SyncAccessoryPayload 填充。</p>
  */
 @Mixin(LocalPlayer.class)
 public abstract class MixinLocalPlayerElytra {
@@ -32,34 +29,24 @@ public abstract class MixinLocalPlayerElytra {
     private void yizxian$startElytraFromAccessory(CallbackInfo ci) {
         LocalPlayer self = (LocalPlayer) (Object) this;
 
-        // 复制原版 elytra 判断条件（1.21.1 的 aiStep 中的精确条件）
+        // 原版鞘翅展开条件：离地、未在飞行、不在水中、未骑乘、无漂浮
         if (self.onGround()) return;
         if (self.isFallFlying()) return;
         if (self.isInWater()) return;
         if (self.isPassenger()) return;
         if (self.hasEffect(MobEffects.LEVITATION)) return;
-        // 必须按了跳跃键（双跳触发鞘翅）
+        // 原版风格：按下跳跃键才展开（防走路/落地反弹误触发）
         if (!self.input.jumping) return;
 
         // 原版已能处理（胸甲槽直接有鞘翅）→ 不干预
         ItemStack chest = self.getItemBySlot(EquipmentSlot.CHEST);
         if (chest.is(Items.ELYTRA) || chest.getItem() instanceof HeartWingsItem) return;
 
-        // 饰品槽有鞘翅 → 手动启动飞行
-        AccessoryContainer container = AccessoryContainer.get(self);
-        for (int i = 0; i < container.getSlotCount(); i++) {
-            ItemStack s = container.getItem(i);
-            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) {
-                YizxianMod.LOGGER.info("[ElytraDiag] Starting flight from accessory slot {}", i);
-                self.startFallFlying();
-                // 起飞推进：由通用突进系统决定（心之翅等任意 BoostProvider）
-                if (BoostRegistry.hasActive(self)) {
-                    BoostData.onTakeoff(self);
-                }
-                self.connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(
-                    self, net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
-                return;
-            }
+        // 饰品槽有鞘翅 → 原版风格（按跳跃键展开）
+        if (AccessoryContainer.hasHeartWings(self)) {
+            self.startFallFlying();
+            self.connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(
+                self, net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
         }
     }
 }

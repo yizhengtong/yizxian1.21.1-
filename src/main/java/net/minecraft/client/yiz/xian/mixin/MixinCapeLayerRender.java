@@ -3,10 +3,8 @@ package net.minecraft.client.yiz.xian.mixin;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.layers.CapeLayer;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
-import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -18,11 +16,14 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * 判断是否穿鞘翅来决定渲染。本 Mixin 用 {@code @Redirect} 拦截该调用，
  * 若胸甲槽为空则查饰品槽，有鞘翅就返回给渲染代码。</p>
  *
+ * <p>物品查询走统一入口 {@link AccessoryContainer#findElytra}（getIfExists，
+ * 不在每帧渲染里创建空实例并缓存）。</p>
+ *
  * <p>烟花火箭加速不需要额外 Mixin —— 原版 {@code FireworkRocketItem.use()}
  * 只检查 {@code isFallFlying()} 标志，已被本模组的三个鞘翅 Mixin 正确维护。</p>
  */
 @Mixin(CapeLayer.class)
-public class MixinCapeLayerRender {
+public abstract class MixinCapeLayerRender {
 
     /**
      * 拦截 CapeLayer.render 中所有 getItemBySlot(EquipmentSlot) 调用。
@@ -37,12 +38,8 @@ public class MixinCapeLayerRender {
         if (slot != EquipmentSlot.CHEST) return real;
         if (!real.isEmpty()) return real; // 胸甲槽有物品，优先
 
-        // 胸甲槽空 → 查饰品槽
-        AccessoryContainer container = AccessoryContainer.get(player);
-        for (int i = 0; i < container.getSlotCount(); i++) {
-            ItemStack s = container.getItem(i);
-            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) return s;
-        }
-        return real;
+        // 胸甲槽空 → 查饰品槽（统一入口，不创建空实例）
+        ItemStack accessory = AccessoryContainer.findElytra(player);
+        return accessory != ItemStack.EMPTY ? accessory : real;
     }
 }

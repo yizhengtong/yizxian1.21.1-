@@ -120,7 +120,14 @@ public class YizxianModClient {
         // 注意：不要在这里 setSyncCallback —— 它会覆盖前置库 NetworkHandler 注入的
         // 网络同步回调（PlayerDataAPI.set → 发 SyncPlayerDataPayload 到客户端），
         // 一旦覆盖，服务端所有 PlayerDataAPI 变更都不再同步到客户端（GUI 空、HUD 看不到恢复等）。
-        // 客户端 _c 容器的刷新改由 BoostHandler.onClientTick 定期 refreshFromSync 兜底。
+
+        // 客户端断开服务器 → 清掉 _c 单例，避免跨重进/换世界携带脏数据。
+        // _c 是只读镜像，重进后由服务端 SyncAccessoryPayload 重新填充。
+        NeoForge.EVENT_BUS.addListener(
+            (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) -> {
+                var p = Minecraft.getInstance().player;
+                if (p != null) AccessoryContainer.discard(p);
+            });
     }
 
     // ── HUD 编辑器：DEL+ALT 边沿触发打开 ──
