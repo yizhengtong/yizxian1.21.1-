@@ -18,12 +18,17 @@
     "MixinElytraFromAccessory",
     "MixinPlayerAccessoryElytra",
     "MixinHeartWingsProtection",
-    "MixinHoverLock"
+    "MixinHoverLock",
+    "MixinMovementAttributes",
+    "MixinJumpStrength",
+    "MixinDodgeHurt",
+    "terraria.MixinExtraJumpFallDamage"
   ],
   "client": [
+    "AttributeScrollScreenMixin",
     "AbstractContainerScreenAccessor",
     "MixinInventoryScreen",
-    "MixinLocalPlayerElytra",
+    "terraria.MixinLocalPlayerExtraJump",
     "MixinElytraLayerRender"
   ],
   "injectors": {

@@ -25,17 +25,17 @@ public class MuramasaItem extends MeleeWeaponItem implements ILeftHandRender {
     public static WeaponProfile buildDefault() {
         return MeleeWeaponScaling.buildProfileWithSpeeds(WEAPON_ID,
             new MeleeWeaponScaling.BaseStats(
-                5.0,   // 攻击力 Lv1
+                25.0,  // 攻击力 Lv1
                 1.8,   // 攻击速度 Lv1
-                12,    // 暴击率 Lv1
-                15,    // 暴伤 Lv1
-                6,     // 吸血 Lv1
-                2.5,   // 溅射半径 Lv1
+                20,    // 暴击率 Lv1
+                20,    // 暴伤 Lv1
+                10,    // 吸血 Lv1
+                6,     // 溅射半径 Lv1
                 30,    // 溅射伤害 Lv1
                 20,    // 溅射衰减 Lv1
-                4.0    // 实体交互距离 Lv1
+                6.0    // 实体交互距离 Lv1
             ),
-            new double[]{1.8, 1.9, 2.0, 2.1, 2.2}  // 自定义攻速序列
+            new double[]{1.8, 1.9, 2.0, 2.1, 2.2}  // 自定义攻速序列（不变）
         );
     }
 }

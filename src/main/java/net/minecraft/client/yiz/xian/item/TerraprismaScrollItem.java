@@ -65,38 +65,39 @@ public class TerraprismaScrollItem extends SummonWeaponItem {
     }
 
     /** 代码默认 Profile：5 级品质，extra 中存储 Terraprisma 专属参数。 */
+    /** 标准化倍率：Lv1→Lv5 = [1, 1.5, 2, 2.5, 3.5]，基础面板 90/剑。 */
     public static WeaponProfile buildDefault() {
         return WeaponProfile.builder(WEAPON_ID)
-            // Level 1: 平凡
-            .level(1).extra("maxSwords", 2).extra("hurtDmg", 3).extra("dmgKind", 0)
+            // Level 1: 平凡 (×1.0 = 90/剑)
+            .level(1).extra("maxSwords", 2).extra("hurtDmg", 90).extra("dmgKind", 0)
                      .extra("trueDmg", 0).extra("modHp", 0).extra("modHpPct", 0)
                      .extra("antiHealSec", 0).extra("antiHealCapSec", 0).next()
-            // Level 2: 优秀
-            .level(2).extra("maxSwords", 4).extra("hurtDmg", 3).extra("dmgKind", 0)
+            // Level 2: 优秀 (×1.5 = 135/剑)
+            .level(2).extra("maxSwords", 4).extra("hurtDmg", 135).extra("dmgKind", 0)
                      .extra("trueDmg", 0).extra("modHp", 0).extra("modHpPct", 0)
                      .extra("antiHealSec", 0).extra("antiHealCapSec", 0).next()
-            // Level 3: 精良
-            .level(3).extra("maxSwords", 5).extra("hurtDmg", 4).extra("dmgKind", 1)
+            // Level 3: 精良 (×2.0 = 180/剑)
+            .level(3).extra("maxSwords", 5).extra("hurtDmg", 180).extra("dmgKind", 1)
                      .extra("trueDmg", 0).extra("modHp", 0).extra("modHpPct", 0)
                      .extra("antiHealSec", 0).extra("antiHealCapSec", 0).next()
-            // Level 4: 史诗
+            // Level 4: 史诗 (×2.5 = 225/剑)
             .level(4).extra("maxSwords", 7).extra("hurtDmg", 0).extra("dmgKind", 2)
-                     .extra("trueDmg", 5).extra("modHp", 0).extra("modHpPct", 0)
+                     .extra("trueDmg", 225).extra("modHp", 0).extra("modHpPct", 0)
                      .extra("antiHealSec", 5).extra("antiHealCapSec", 15).next()
-            // Level 5: 传说
+            // Level 5: 传说 (×3.5 = 315/剑，真伤126+固伤189)
             .level(5).extra("maxSwords", 9).extra("hurtDmg", 0).extra("dmgKind", 3)
-                     .extra("trueDmg", 2).extra("modHp", 3).extra("modHpPct", 0.0001)
+                     .extra("trueDmg", 126).extra("modHp", 189).extra("modHpPct", 0.006)
                      .extra("antiHealSec", 5).extra("antiHealCapSec", 45)
             .build();
     }
 
     // ═══ 静态备用表（profile 为 null 时的回退） ═══
     private static final TerraprismaLevel[] TABLE = {
-        new TerraprismaLevel(2, 3, DamageKind.PHYSICAL,   0, 0, 0,       0,  0),
-        new TerraprismaLevel(4, 3, DamageKind.PHYSICAL,   0, 0, 0,       0,  0),
-        new TerraprismaLevel(5, 4, DamageKind.MAGIC,      0, 0, 0,       0,  0),
-        new TerraprismaLevel(7, 0, DamageKind.TRUE_DAMAGE,5, 0, 0,       5, 15),
-        new TerraprismaLevel(9, 0, DamageKind.HYBRID,     2, 3, 0.0001, 5, 45),
+        new TerraprismaLevel(2, 90, DamageKind.PHYSICAL,   0,   0, 0,      0,  0),
+        new TerraprismaLevel(4, 135, DamageKind.PHYSICAL,  0,   0, 0,      0,  0),
+        new TerraprismaLevel(5, 180, DamageKind.MAGIC,     0,   0, 0,      0,  0),
+        new TerraprismaLevel(7, 0, DamageKind.TRUE_DAMAGE, 225, 0, 0,      5, 15),
+        new TerraprismaLevel(9, 0, DamageKind.HYBRID,      126, 189, 0.006, 5, 45),
     };
 
     public static TerraprismaLevel specOf(int level) {

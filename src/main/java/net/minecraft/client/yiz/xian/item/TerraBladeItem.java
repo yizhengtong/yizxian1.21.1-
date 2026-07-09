@@ -25,15 +25,15 @@ public class TerraBladeItem extends MeleeWeaponItem implements ILeftHandRender {
     public static WeaponProfile buildDefault() {
         return MeleeWeaponScaling.buildProfile(WEAPON_ID,
             new MeleeWeaponScaling.BaseStats(
-                17.5,  // 攻击力 Lv1
-                1.4,   // 攻击速度 Lv1
-                25,    // 暴击率 Lv1
-                20,    // 暴伤 Lv1
-                10,    // 吸血 Lv1
+                85.5,  // 攻击力 Lv1
+                1.6,   // 攻击速度 Lv1
+                30,    // 暴击率 Lv1
+                30,    // 暴伤 Lv1
+                12,    // 吸血 Lv1
                 6,     // 溅射半径 Lv1
                 50,    // 溅射伤害 Lv1
                 30,    // 溅射衰减 Lv1
-                4.2    // 实体交互距离 Lv1
+                6.2    // 实体交互距离 Lv1
             ));
     }
 }

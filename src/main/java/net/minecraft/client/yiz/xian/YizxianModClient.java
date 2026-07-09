@@ -7,7 +7,7 @@ import net.minecraft.client.yiz.api.TargetFrameManager;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
 import net.minecraft.client.yiz.xian.command.YizxianClientCommand;
-import net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider;
+import net.minecraft.client.yiz.xian.effect.LockOnProvider;
 import net.minecraft.client.yiz.xian.handler.BoostHandler;
 import net.minecraft.client.yiz.xian.handler.HeartWingsKeyMappings;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
@@ -30,12 +30,18 @@ import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
+import net.minecraft.client.yiz.xian.api.terraria.JumpAttributes;
 import net.minecraft.client.yiz.xian.hud.BoostHud;
+import net.minecraft.client.yiz.xian.hud.ExtraJumpHud;
 import net.minecraft.client.yiz.xian.hud.HudEditorScreen;
 import net.minecraft.client.yiz.xian.hud.HudManager;
 import net.minecraft.client.yiz.xian.hud.HudPositionConfig;
+import net.minecraft.client.yiz.xian.item.terraria.TerrariaAccessoryItem;
 import org.lwjgl.glfw.GLFW;
 import org.joml.Vector4f;
+
+import java.util.Map;
 
 @Mod(value = YizxianMod.MODID, dist = Dist.CLIENT)
 public class YizxianModClient {
@@ -46,8 +52,10 @@ public class YizxianModClient {
         // 心之翅可配置按键
         modEventBus.addListener(HeartWingsKeyMappings::register);
 
-        // 会心一击锁定框 — 高优先级，覆盖母效果
-        TargetFrameManager.register(new CriticalStrikeProvider());
+        // 锁定系统 — 属性驱动锁定框，高优先级
+        TargetFrameManager.register(new LockOnProvider());
+
+        // 属性卷轴交互：由 AttributeScrollScreenMixin 处理
 
         // 客户端命令：/yizxian panel ...
         NeoForge.EVENT_BUS.addListener(YizxianClientCommand::onRegisterClientCommands);
@@ -73,6 +81,7 @@ public class YizxianModClient {
         // ═══ HUD 系统：DEL+ALT 打开编辑器，RenderGuiEvent 分发 ═══
         HudPositionConfig.load();
         HudManager.register(new BoostHud());
+        HudManager.register(new ExtraJumpHud());
         NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
         NeoForge.EVENT_BUS.addListener(YizxianModClient::onHudKeyTick);
 
@@ -121,6 +130,9 @@ public class YizxianModClient {
         // 网络同步回调（PlayerDataAPI.set → 发 SyncPlayerDataPayload 到客户端），
         // 一旦覆盖，服务端所有 PlayerDataAPI 变更都不再同步到客户端（GUI 空、HUD 看不到恢复等）。
 
+        // 任意物品的跳跃属性 tooltip（JUMP_ATTRIBUTES 组件注入的非泰拉饰品物品）
+        NeoForge.EVENT_BUS.addListener(YizxianModClient::onItemTooltip);
+
         // 客户端断开服务器 → 清掉 _c 单例，避免跨重进/换世界携带脏数据。
         // _c 是只读镜像，重进后由服务端 SyncAccessoryPayload 重新填充。
         NeoForge.EVENT_BUS.addListener(
@@ -146,5 +158,24 @@ public class YizxianModClient {
             mc.setScreen(new HudEditorScreen());
         }
         delAltWasDown = both;
+    }
+
+    // ── 跳跃属性 tooltip（ItemTooltipEvent）─────────────────────────
+
+    /**
+     * 给任意带 {@link JumpAttributes}（JUMP_ATTRIBUTES 组件）的非泰拉饰品物品
+     * 追加跳跃属性 tooltip。泰拉饰品走 {@link TerrariaAccessoryItem#appendHoverText}，
+     * 不在此处重复渲染。
+     */
+    private static void onItemTooltip(
+            net.neoforged.neoforge.event.entity.player.ItemTooltipEvent event) {
+        var stack = event.getItemStack();
+        if (stack.isEmpty()) return;
+        // 泰拉饰品已由 TerrariaAccessoryItem.appendHoverText 处理，不重复
+        if (stack.getItem() instanceof TerrariaAccessoryItem) return;
+        if (!JumpAttributes.hasAny(stack)) return;
+
+        Map<EffectTag, Float> attrs = JumpAttributes.getWithDefaults(stack);
+        TerrariaAccessoryItem.appendAttrStats(event.getToolTip(), attrs);
     }
 }

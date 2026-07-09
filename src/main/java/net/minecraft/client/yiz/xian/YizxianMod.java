@@ -1,44 +1,48 @@
 package net.minecraft.client.yiz.xian;
 
 import com.mojang.serialization.Codec;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 import net.minecraft.client.yiz.api.CritTracker;
+import net.minecraft.client.yiz.api.DamageReductionRegistry;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
-import net.minecraft.client.yiz.api.RealmProgressionAPI;
 import net.minecraft.client.yiz.api.YizModQZKAPI;
 import net.minecraft.client.yiz.attribute.YizAttributes;
-import net.minecraft.client.yiz.tool.health.EntityASMUtil;
+import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.minecraft.client.yiz.weapon.StagedWeaponRegistration;
 import net.minecraft.client.yiz.weapon.WeaponLevelData;
 import net.minecraft.client.yiz.weapon.WeaponProfileRegistry;
 import net.minecraft.client.yiz.xian.api.ComboStateMachine;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
+import net.minecraft.client.yiz.xian.api.terraria.AccessoryFlags;
+import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
+import net.minecraft.client.yiz.xian.api.terraria.ExtraJumpData;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.client.yiz.xian.item.MeleeWeaponItem;
 import net.minecraft.client.yiz.xian.item.WeaponItem;
 
-import net.minecraft.client.yiz.xian.effect.CriticalStrikeEffect;
-import net.minecraft.client.yiz.xian.effect.CriticalStrikeProvider;
-import net.minecraft.client.yiz.xian.effect.SharpBladeEffect;
-import net.minecraft.client.yiz.xian.item.GeneralItemItem;
-import net.minecraft.client.yiz.xian.item.SkillScrollItem;
-import net.minecraft.client.yiz.xian.item.TalentCoreItem;
+import net.minecraft.client.yiz.xian.effect.LockOnHandler;
+
+import net.minecraft.client.yiz.xian.item.AttributeScrollItem;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
-import net.minecraft.client.yiz.xian.item.WeaponCoreItem;
+
+import net.minecraft.client.yiz.xian.handler.AccessoryProtectionHandler;
 import net.minecraft.client.yiz.xian.handler.BoostHandler;
+import net.minecraft.client.yiz.xian.handler.terraria.ExtraJumpHandler;
 import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.client.yiz.xian.network.C2SBoostPayload;
+import net.minecraft.client.yiz.xian.network.C2SExtraJumpBoostPayload;
+import net.minecraft.client.yiz.xian.network.C2SExtraJumpPayload;
 import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.minecraft.client.yiz.xian.realm.BreakthroughHandler;
-import net.minecraft.client.yiz.xian.realm.RealmAttributeHandler;
-import net.minecraft.client.yiz.xian.realm.RealmStages;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -50,6 +54,8 @@ import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -58,6 +64,10 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.network.chat.Component;
+import net.minecraft.client.yiz.xian.item.terraria.TerrariaAccessoryItem;
+import net.minecraft.client.yiz.xian.item.terraria.TerrariaCards;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
@@ -88,16 +98,26 @@ public class YizxianMod {
     public static final DeferredRegister<Item> ITEMS =
         DeferredRegister.create(Registries.ITEM, MODID);
 
-    public static final Supplier<Item> TALENT_CORE =
-        ITEMS.register("talent_core", TalentCoreItem::new);
-    public static final Supplier<Item> SKILL_SCROLL =
-        ITEMS.register("skill_scroll", SkillScrollItem::new);
-    public static final Supplier<Item> GENERAL_ITEM =
-        ITEMS.register("general_item", GeneralItemItem::new);
-    public static final Supplier<Item> WEAPON_CORE =
-        ITEMS.register("weapon_core", WeaponCoreItem::new);
+    /**
+     * 自定义 DataComponentType 注册（项目首次用，2026-07-06）。
+     * <p>类型安全、语法干净，{@code /give} 可直接用 {@code leather_boots[yizxianmod:jump_attributes={...}]}。</p>
+     */
+    public static final DeferredRegister<net.minecraft.core.component.DataComponentType<?>> DATA_COMPONENTS =
+        DeferredRegister.create(net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE, MODID);
+
+    /** 跳跃属性组件：{@code Map<EffectTag, Float>}，存任意物品的 JUMP_COUNT/HEIGHT/FALL_SAFE/FALL_REDUCCE。 */
+    public static final Supplier<net.minecraft.core.component.DataComponentType<java.util.Map<EffectTag, Float>>> JUMP_ATTRIBUTES =
+        DATA_COMPONENTS.register("jump_attributes",
+            () -> net.minecraft.core.component.DataComponentType
+                .<java.util.Map<EffectTag, Float>>builder()
+                .persistent(net.minecraft.client.yiz.xian.api.terraria.JumpAttrCodec.CODEC)
+                .networkSynchronized(net.minecraft.client.yiz.xian.api.terraria.JumpAttrCodec.STREAM_CODEC)
+                .build());
+
     public static final Supplier<Item> HEART_WINGS =
         ITEMS.register("heart_wings", HeartWingsItem::new);
+    public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
+        ITEMS.register("attribute_scroll", () -> new AttributeScrollItem(new Item.Properties().stacksTo(64)));
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
     public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
         StagedWeaponRegistration.<TerraprismaScrollItem>create(ITEMS, MODID, "terraprisma_scroll", 5)
@@ -117,11 +137,89 @@ public class YizxianMod {
             .profile(MuramasaItem::buildDefault)
             .register(MuramasaItem::new);
 
+    // ─── 泰拉瑞亚配饰（42 个，M0 阶段空壳） ─────────────────────────
+    /** 42 个泰拉配饰物品供应器。注册名 acc_<id>，由 {@link TerrariaCards#CARDS} 驱动。 */
+    public static final List<Supplier<Item>> TERRARIA_ACCESSORIES = registerTerrariaAccessories();
+
+    private static List<Supplier<Item>> registerTerrariaAccessories() {
+        List<Supplier<Item>> list = new ArrayList<>();
+        for (TerrariaCards.Card card : TerrariaCards.CARDS) {
+            list.add(ITEMS.register(card.regName(),
+                () -> new TerrariaAccessoryItem(card.id(),
+                    new Item.Properties().stacksTo(1))));
+        }
+        return Collections.unmodifiableList(list);
+    }
+
+    // ─── 创造模式标签页（2026-07-07 重构） ────────────────────────────
+    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
+        DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+
+    private static final Supplier<CreativeModeTab> tab(String id, String titleKey, java.util.function.Supplier<Item> icon, java.util.function.Consumer<CreativeModeTab.Output> filler) {
+        return CREATIVE_MODE_TABS.register(id, () -> CreativeModeTab.builder()
+            .title(Component.translatable(titleKey))
+            .icon(() -> new ItemStack(icon.get()))
+            .displayItems((params, output) -> filler.accept(output))
+            .build());
+    }
+
+    /** 近战武器 */
+    public static final Supplier<CreativeModeTab> MELEE_TAB = tab("melee", "itemGroup.yizxianmod.melee",
+        () -> TERRA_BLADES.get(0).get(), o -> {
+            for (var s : TERRA_BLADES) o.accept(s.get());
+            for (var s : MURAMASAS) o.accept(s.get());
+        });
+
+    /** 主动法术 */
+    public static final Supplier<CreativeModeTab> ACTIVE_SPELL_TAB = tab("active_spell", "itemGroup.yizxianmod.active_spell",
+        HEART_WINGS, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
+
+    /** 被动法术 */
+    public static final Supplier<CreativeModeTab> PASSIVE_SPELL_TAB = tab("passive_spell", "itemGroup.yizxianmod.passive_spell",
+        HEART_WINGS, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
+
+    /** 召唤物 */
+    public static final Supplier<CreativeModeTab> SUMMON_TAB = tab("summon", "itemGroup.yizxianmod.summon",
+        () -> TERRAPRISMA_SCROLLS.get(0).get(), o -> {
+            for (var s : TERRAPRISMA_SCROLLS) o.accept(s.get());
+        });
+
+    /** 技能 */
+    public static final Supplier<CreativeModeTab> SKILL_TAB = tab("skill", "itemGroup.yizxianmod.skill",
+        HEART_WINGS, o -> {
+            // 效果框架已移除 — 技能页不再自动生成效果物品
+        });
+
+    /** 饰品 */
+    public static final Supplier<CreativeModeTab> ACCESSORY_TAB = tab("accessory", "itemGroup.yizxianmod.accessory",
+        HEART_WINGS, o -> {
+            o.accept(HEART_WINGS.get());
+            for (var s : TERRARIA_ACCESSORIES) o.accept(s.get());
+        });
+
+    /** 属性卷轴 */
+    public static final Supplier<CreativeModeTab> ATTR_SCROLL_TAB = tab("attr_scroll", "itemGroup.yizxianmod.attr_scroll",
+        ATTRIBUTE_SCROLL_ITEM, o -> {
+            for (String attrId : AttributeScrollItem.ATTRIBUTES.keySet()) {
+                o.accept(AttributeScrollItem.createPlus(attrId));
+                o.accept(AttributeScrollItem.createMinus(attrId));
+            }
+        });
+
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
 
+        // 注册下游 EffectTag 属性到属性编辑台
+        registerEditorEffectTags();
+
         // ---- 物品注册 ----
         ITEMS.register(modEventBus);
+
+        // ---- 自定义 DataComponentType 注册（跳跃属性等） ----
+        DATA_COMPONENTS.register(modEventBus);
+
+        // ---- 创造模式标签页 ----
+        CREATIVE_MODE_TABS.register(modEventBus);
 
         // ---- 网络包：C2S 突进请求 + S2C 饰品容器同步 ----
         modEventBus.addListener(RegisterPayloadHandlersEvent.class, event -> {
@@ -131,22 +229,35 @@ public class YizxianMod {
                 C2SBoostPayload.STREAM_CODEC,
                 C2SBoostPayload::handle
             );
+            // 客户端 → 服务端：请求一次附加跳（多段跳）
+            registrar.playToServer(
+                C2SExtraJumpPayload.TYPE,
+                C2SExtraJumpPayload.STREAM_CODEC,
+                C2SExtraJumpPayload::handle
+            );
+            // 客户端 → 服务端：鞘翅飞行时 TAB 请求一次多段跳突进（优先度低于心之翅）
+            registrar.playToServer(
+                C2SExtraJumpBoostPayload.TYPE,
+                C2SExtraJumpBoostPayload.STREAM_CODEC,
+                C2SExtraJumpBoostPayload::handle
+            );
             // 服务端 → 客户端：推送饰品容器权威快照（_c 唯一数据入口）
             registrar.playToClient(
                 SyncAccessoryPayload.TYPE,
                 SyncAccessoryPayload.STREAM_CODEC,
                 SyncAccessoryPayload::handle
             );
+            // 客户端 → 服务端：属性卷轴应用请求
+            registrar.playToServer(
+                net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload::handle
+            );
         });
 
         // ---- 创造模式物品栏 ----
-        modEventBus.addListener(this::onBuildCreativeTab);
 
-        // ---- 效果注册（构造函数自动注册到 ModRegistries） ----
-        new SharpBladeEffect(5);
-        LOGGER.info("SharpBladeEffect registered");
-        new CriticalStrikeEffect(3);
-        LOGGER.info("CriticalStrikeEffect registered");
+
 
         // ---- yiz-qzk integration ----
         PlayerDataAPI.register("yizxgmod:star_body", Codec.BOOL, false);
@@ -154,27 +265,26 @@ public class YizxianMod {
         PlayerDataAPI.register("yizxianmod:combo_step", Codec.INT, -1);
         PlayerDataAPI.register("yizxianmod:combo_tick", Codec.INT, 0);
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
-        PlayerDataAPI.register(CriticalStrikeEffect.DATA_TIMER, Codec.intRange(0, 100), 0);
-        PlayerDataAPI.register(CriticalStrikeEffect.DATA_TARGET, Codec.STRING, "");
 
         // ---- 饰品槽数据（服务器持久化 + copyOnDeath + 客户端同步） ----
         AccessoryContainer.registerDataKeys();
         // 通用突进数据（心之翅等 BoostProvider 共享池）
         net.minecraft.client.yiz.xian.api.BoostData.register();
+        // 附加跳数据（多段跳 bitmask，set 自动 S2C 同步）
+        ExtraJumpData.register();
         // 注册突进来源（两端执行，供服务端 BoostHandler 与客户端 BoostHud 查询）
         net.minecraft.client.yiz.xian.api.BoostRegistry.register(
                 net.minecraft.client.yiz.xian.api.HeartWingsBoostProvider.INSTANCE);
 
-        // ---- 境界跨度 ----
-        RealmStages.register();
-        RealmAttributeHandler.register();
-
-        RealmProgressionAPI.onBreakthrough((player, stage) -> {
-            RealmAttributeHandler.applyAttributes(player);
-            LOGGER.info("{} broke through to {}", player.getName().getString(), stage.displayName());
+        // 装备减伤
+        DamageReductionRegistry.register((entity, oldHealth, newHealth) -> {
+            if (!(entity instanceof ServerPlayer player)) return newHealth;
+            float reduction = AccessoryFlags.sumValues(player)
+                .getOrDefault(EffectTag.DAMAGE_REDUCTION, 0f);
+            if (reduction <= 0) return newHealth;
+            float damage = oldHealth - newHealth;
+            return oldHealth - damage * (1f - reduction / 100f);
         });
-
-        LOGGER.info("Yiz Xian realm stages registered");
 
         // ---- JSON 热重载（暂时禁用，排查进世界卡住问题） ----
         // NeoForge.EVENT_BUS.addListener(this::onAddReloadListeners);
@@ -193,16 +303,18 @@ public class YizxianMod {
 
         // 心之翅服务端：恢复 + 悬停锁死 + 落地归零
         NeoForge.EVENT_BUS.addListener(BoostHandler::onPlayerTick);
-    }
+        // 附加跳服务端：空中 cap（卸饰品失效清理）+ 落地/登录/重生充满（事件驱动，修空中 onGround 误判 → 无限跳）
+        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onLivingFall);
+        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerLogin);
+        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerRespawn);
+        // 装备保护态：闪避 + 无敌帧
+        NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onLivingDamagePost);
+        NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onServerTick);
 
-    /** 将本模组物品放入创造模式物品栏 */
-    private void onBuildCreativeTab(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-            event.accept(HEART_WINGS.get());
-            for (var s : TERRAPRISMA_SCROLLS) event.accept(s.get());
-            for (var s : TERRA_BLADES) event.accept(s.get());
-            for (var s : MURAMASAS) event.accept(s.get());
-        }
+        // 锁定系统：属性驱动充能 + 距离延伸
+        NeoForge.EVENT_BUS.addListener(LockOnHandler::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(LockOnHandler::onLivingDamagePre);
     }
 
     /**
@@ -234,9 +346,8 @@ public class YizxianMod {
 
     /** 防止溅射伤害递归触发自身 */
     private static final ThreadLocal<Boolean> IN_SPLASH = ThreadLocal.withInitial(() -> false);
-    private static final ThreadLocal<Boolean> IN_CRIT = ThreadLocal.withInitial(() -> false);
 
-    /** 会心一击：攻击命中 → 未满充重置 / 满充突进+伤害 */
+    /** 攻击命中：吸血 + 溅射 + 锁定系统已迁至 LockOnHandler */
     private void onLivingDamage(LivingDamageEvent.Pre event) {
         if (!(event.getSource().getEntity() instanceof Player player)) return;
         if (player.level().isClientSide) return;
@@ -253,8 +364,7 @@ public class YizxianMod {
         // ═══ 吸血系统 ═══
         float lifeSteal = safeAttr(player, YizAttributes.LIFE_STEAL)
             + (float) (wld != null ? wld.getExtra("lifeSteal") : 0);
-        if (lifeSteal > 0 && event.getNewDamage() > 0
-                && !CriticalStrikeEffect.isReady(player)) {
+        if (lifeSteal > 0 && event.getNewDamage() > 0) {
             float healAmount = event.getNewDamage() * (lifeSteal / 100.0f);
             if (healAmount > 0) {
                 player.heal(healAmount);
@@ -265,7 +375,6 @@ public class YizxianMod {
         float splashRadius = safeAttr(player, YizAttributes.SPLASH_RADIUS)
             + (float) (wld != null ? wld.getExtra("splashRadius") : 0);
         if (splashRadius > 0 && event.getNewDamage() > 0
-                && !CriticalStrikeEffect.isReady(player)
                 && event.getEntity() instanceof LivingEntity primaryTarget) {
             float splashDmgPct = safeAttr(player, YizAttributes.SPLASH_DAMAGE)
                 + (float) (wld != null ? wld.getExtra("splashDmg") : 0);
@@ -277,52 +386,6 @@ public class YizxianMod {
             }
         }
 
-        // ═══ 原有 CriticalStrikeEffect（计时锁定暴击，与概率暴击独立共存） ═══
-        if (IN_SPLASH.get() || IN_CRIT.get()) return;
-        if (!CriticalStrikeEffect.isReady(player)) {
-            // 未满 2.5 秒就攻击 → 重置蓄力
-            int timer = (int) PlayerDataAPI.get(player, CriticalStrikeEffect.DATA_TIMER);
-            if (timer > 0) {
-                CriticalStrikeEffect.reset(player);
-                CriticalStrikeProvider.reset(player);
-            }
-            return;
-        }
-
-        float baseDamage = event.getOriginalDamage();
-        event.setNewDamage(0);
-
-        String targetUuid = CriticalStrikeEffect.getTargetUuid(player);
-        if (targetUuid.isEmpty()) return;
-        Entity lockedTarget = ((ServerLevel) player.level()).getEntity(UUID.fromString(targetUuid));
-        if (!(lockedTarget instanceof LivingEntity target) || !target.isAlive()) return;
-
-        IN_CRIT.set(true);
-        try {
-            executeCrit(player, target, baseDamage);
-        } finally {
-            IN_CRIT.set(false);
-        }
-    }
-
-    private void executeCrit(Player player, LivingEntity target, float baseDamage) {
-        var dir = target.position().subtract(player.position()).normalize();
-        player.setDeltaMovement(dir.scale(1.5));
-        player.hurtMarked = true;
-
-        int level = CriticalStrikeEffect.getPlayerLevel(player);
-
-        if (net.minecraft.client.yiz.xian.render.C2MECompat.LOADED) {
-            // C2ME 兼容：合并为 vanilla hurt()，跳过 delta 系统
-            float total = baseDamage * 2 + baseDamage * level;
-            target.hurt(player.damageSources().playerAttack(player), total);
-        } else {
-            YizModQZKAPI.trueDamage(target, baseDamage * 2, player);
-            EntityASMUtil.modifyHealth(target, -(baseDamage * level));
-        }
-
-        CriticalStrikeEffect.reset(player);
-        CriticalStrikeProvider.reset(player);
     }
 
     /**
@@ -401,8 +464,8 @@ public class YizxianMod {
 
     private void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
-        BreakthroughHandler.checkAndBreakthrough(serverPlayer);
-        RealmAttributeHandler.applyHealthRegen(serverPlayer);
+        applyAccessoryArmor(serverPlayer);
+        applyAccessoryRegen(serverPlayer);
         // 连招 tick 计数
         ItemStack held = serverPlayer.getMainHandItem();
         UUID puid = serverPlayer.getUUID();
@@ -423,7 +486,6 @@ public class YizxianMod {
 
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            RealmAttributeHandler.applyAttributes(serverPlayer);
             // 复用既有 _s 实例（InventoryMenu 的 slot 已绑定它），只 reload 内容。
             // 绝不 discard+换实例 —— 否则 Menu slot 指向旧实例、INSTANCES 指向新实例，
             // 表现为"取出后还能飞 / 槽位空 / 放入闪烁"的双实例脱节。
@@ -450,7 +512,7 @@ public class YizxianMod {
     /** 玩家退出：清理会心一击的运行时状态与修饰符，避免下次登录残留脏数据。 */
     private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            CriticalStrikeEffect.reset(serverPlayer);
+            LockOnHandler.onPlayerLogout(serverPlayer);
             // 清理饰品槽单例，防止服务器端容器实例随玩家退出泄漏
             AccessoryContainer.discard(serverPlayer);
         }
@@ -464,8 +526,7 @@ public class YizxianMod {
      */
     private void onLivingDeath(LivingDeathEvent event) {
         if (event.getEntity() instanceof Player player && !player.level().isClientSide) {
-            CriticalStrikeEffect.reset(player);
-            CriticalStrikeProvider.reset(player);
+            LockOnHandler.onPlayerDeath(player);
         }
     }
 
@@ -498,5 +559,41 @@ public class YizxianMod {
             }
         });
         LOGGER.info("Weapon profile JSON reload listener registered");
+    }
+
+    /** 装备属性应用：读取 ARMOR 值，1:1 写到原版护甲值和护甲韧性。每 tick 调用确保装卸即时生效。 */
+    private static void applyAccessoryArmor(ServerPlayer player) {
+        float armor = AccessoryFlags.sumValues(player).getOrDefault(EffectTag.ARMOR, 0f);
+        ItemAttributeHandler.setEntityAttribute(player, Attributes.ARMOR,
+            "acc_armor", armor, AttributeModifier.Operation.ADD_VALUE);
+        ItemAttributeHandler.setEntityAttribute(player, Attributes.ARMOR_TOUGHNESS,
+            "acc_toughness", armor, AttributeModifier.Operation.ADD_VALUE);
+    }
+
+    /** 装备自然回复：LIFE_REGEN_RATE（固定）+ LIFE_REGEN_PCT（百分比），走 Delta 通道。 */
+    private static void applyAccessoryRegen(ServerPlayer player) {
+        if (!player.isAlive()) return;   // 死亡期间停止回复
+        Map<EffectTag, Float> attrs = AccessoryFlags.sumValues(player);
+        float fixedRate = attrs.getOrDefault(EffectTag.LIFE_REGEN_RATE, 0f);
+        float pctRate   = attrs.getOrDefault(EffectTag.LIFE_REGEN_PCT, 0f);
+        if (fixedRate <= 0 && pctRate <= 0) return;
+
+        // 固定：1 点 = 每 tick 0.05 HP；百分比：1 点 = 每 tick 0.05% 最大生命
+        float regenPerTick = fixedRate * 0.05f + player.getMaxHealth() * pctRate * 0.0005f;
+        if (regenPerTick > 0) {
+            YizModQZKAPI.healthRegen(player, regenPerTick);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  属性编辑台：注册下游 EffectTag 属性
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * 属性编辑台 EffectTag 注册 —— 已全部迁移至库 {@code EditableAttribute} 内置列表。
+     * 保留空方法以便后续有纯 FLAG 属性需要注册时使用。
+     */
+    private static void registerEditorEffectTags() {
+        // 所有数值属性已作为 yizmodqzk 原生 Attribute 注册在 EditableAttribute BUILTIN 中
     }
 }
