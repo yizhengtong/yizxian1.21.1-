@@ -141,8 +141,6 @@ public final class YizxianCommand {
         java.util.Map.entry("damage_reduction",    ItemAttributeHandler::addDamageReduction),
         java.util.Map.entry("generic_damage",      ItemAttributeHandler::addGenericDamage),
         java.util.Map.entry("on_hurt",             ItemAttributeHandler::addOnHurt),
-        java.util.Map.entry("on_attack",           ItemAttributeHandler::addOnAttack),
-        java.util.Map.entry("on_tick",             ItemAttributeHandler::addOnTick),
         java.util.Map.entry("counter_rate",        ItemAttributeHandler::addCounterRate),
         java.util.Map.entry("counter_value",       ItemAttributeHandler::addCounterValue),
         java.util.Map.entry("counter_count",       ItemAttributeHandler::addCounterCount),

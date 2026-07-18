@@ -74,7 +74,7 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
         "splash_radius", "splash_damage", "splash_falloff",
         "huixin", "kegong",
         "generic_damage", "damage_block",
-        "on_hurt", "on_attack", "on_tick",
+        "on_hurt",
         "counter_rate", "counter_value", "counter_count",
         "undying",
         "projectile_reflection", "no_collision", "knockback_immunity", "projectile_immunity"
@@ -112,8 +112,6 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
                 case "generic_damage"       -> ItemAttributeHandler.addGenericDamage(stack, delta);
                 case "damage_block"         -> ItemAttributeHandler.addDamageBlock(stack, delta);
                 case "on_hurt"              -> ItemAttributeHandler.addOnHurt(stack, delta);
-                case "on_attack"            -> ItemAttributeHandler.addOnAttack(stack, delta);
-                case "on_tick"              -> ItemAttributeHandler.addOnTick(stack, delta);
                 case "counter_rate"         -> ItemAttributeHandler.addCounterRate(stack, delta);
                 case "counter_value"        -> ItemAttributeHandler.addCounterValue(stack, delta);
                 case "counter_count"        -> ItemAttributeHandler.addCounterCount(stack, delta);

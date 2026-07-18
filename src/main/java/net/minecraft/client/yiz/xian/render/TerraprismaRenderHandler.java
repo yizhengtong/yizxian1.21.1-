@@ -961,20 +961,28 @@ public final class TerraprismaRenderHandler {
             Runnable dealDamage = () -> {
                 net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeHurt(st, sp);
                 net.minecraft.client.yiz.api.YizModQZKWZAPI.fakeKnockback(st, b.velocity.x, b.velocity.z, 0.05);
+                // 召唤伤害加成：直接乘入三层伤害公式
+                var summonInst = sp.getAttribute(
+                    net.minecraft.client.yiz.attribute.YizAttributes.SUMMON_DAMAGE);
+                float summonMul = 1f + (summonInst != null ? (float)summonInst.getValue() / 100f : 0f);
+
                 // ② 按等级配置的原版 hurt
                 switch (spec.kind()) {
-                    case PHYSICAL -> st.hurt(sp.damageSources().playerAttack(sp), (float)spec.hurtDmg());
-                    case MAGIC     -> st.hurt(sp.damageSources().indirectMagic(sp, sp), (float)spec.hurtDmg());
+                    case PHYSICAL -> st.hurt(sp.damageSources().playerAttack(sp),
+                        (float)(spec.hurtDmg() * summonMul));
+                    case MAGIC     -> st.hurt(sp.damageSources().indirectMagic(sp, sp),
+                        (float)(spec.hurtDmg() * summonMul));
                     default -> {} // TRUE_DAMAGE / HYBRID 不走原版 hurt
                 }
 
                 // ③ trueDamage
                 if (spec.trueDmg() > 0 && useTrueDamage)
-                    net.minecraft.client.yiz.api.YizModQZKAPI.trueDamage(st, (float)spec.trueDmg(), sp);
+                    net.minecraft.client.yiz.api.YizModQZKAPI.trueDamage(
+                        st, (float)(spec.trueDmg() * summonMul), sp);
 
                 // ④ modifyHealth
                 if (spec.modHp() > 0 && useModifyHealth) {
-                    float modDmg = (float)(spec.modHp() + st.getMaxHealth() * spec.modHpPctOfMax());
+                    float modDmg = (float)((spec.modHp() + st.getMaxHealth() * spec.modHpPctOfMax()) * summonMul);
                     net.minecraft.client.yiz.tool.health.EntityASMUtil.modifyHealth(st, -modDmg);
                 }
             };

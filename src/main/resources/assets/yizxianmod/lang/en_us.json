@@ -14,6 +14,9 @@
   "item.yizxianmod.terra_blade_4": "Terra Blade·Epic",
   "item.yizxianmod.terra_blade_5": "Terra Blade·Legendary",
   "item.yizxianmod.heart_wings": "Heart Wings",
+  "item.yizxianmod.xian_dan_qiang": "Shotgun",
+  "item.yizxianmod.tian_lei_yin": "Tian Lei Yin",
+  "item.yizxianmod.ben_lei_ji": "Ben Lei Ji",
   "item.yizxianmod.acc_53": "Cloud in a Bottle",
   "item.yizxianmod.acc_54": "Hermes Boots",
   "item.yizxianmod.acc_128": "Rocket Boots",
@@ -57,6 +60,7 @@
   "item.yizxianmod.acc_5107": "Magiluminescence",
   "item.yizxianmod.acc_5331": "Bundle of Horseshoe Balloons",
   "itemGroup.yizxianmod.terra_accessories": "Terraria Accessories",
+  "itemGroup.yizxianmod.ranged": "Ranged",
   "block.yizxianmod.attribute_tester": "Attribute Tester",
   "item.yizxianmod.attribute_tester": "Attribute Tester",
   "itemGroup.yizxianmod.work_blocks": "Work Blocks"

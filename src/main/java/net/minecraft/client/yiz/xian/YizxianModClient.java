@@ -34,7 +34,7 @@ import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
 import net.minecraft.client.yiz.xian.api.terraria.JumpAttributes;
 import net.minecraft.client.yiz.xian.hud.BoostHud;
 import net.minecraft.client.yiz.xian.hud.ExtraJumpHud;
-import net.minecraft.client.yiz.xian.hud.HudEditorScreen;
+import net.minecraft.client.yiz.hud.HudEditorScreen;
 import net.minecraft.client.yiz.xian.hud.HudManager;
 import net.minecraft.client.yiz.xian.hud.HudPositionConfig;
 import net.minecraft.client.yiz.xian.item.terraria.TerrariaAccessoryItem;

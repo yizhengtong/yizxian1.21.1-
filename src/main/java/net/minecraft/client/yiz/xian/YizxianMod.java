@@ -37,6 +37,7 @@ import net.minecraft.client.yiz.xian.handler.AccessoryProtectionHandler;
 import net.minecraft.client.yiz.xian.handler.BoostHandler;
 import net.minecraft.client.yiz.xian.handler.terraria.ExtraJumpHandler;
 import net.minecraft.client.yiz.xian.item.HeartWingsItem;
+import net.minecraft.client.yiz.xian.item.XianDanQiangItem;
 import net.minecraft.client.yiz.xian.network.C2SBoostPayload;
 import net.minecraft.client.yiz.xian.network.C2SExtraJumpBoostPayload;
 import net.minecraft.client.yiz.xian.network.C2SExtraJumpPayload;
@@ -114,6 +115,12 @@ public class YizxianMod {
                 .networkSynchronized(net.minecraft.client.yiz.xian.api.terraria.JumpAttrCodec.STREAM_CODEC)
                 .build());
 
+    public static final Supplier<Item> TIAN_LEI_YIN =
+        ITEMS.register("tian_lei_yin", net.minecraft.client.yiz.xian.skill.TianLeiYinItem::new);
+    public static final Supplier<Item> BEN_LEI_JI =
+        ITEMS.register("ben_lei_ji", net.minecraft.client.yiz.xian.skill.BenLeiJiItem::new);
+    public static final Supplier<Item> LEI_MING_DIAN_JIA =
+        ITEMS.register("lei_ming_dian_jia", net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem::new);
     public static final Supplier<Item> HEART_WINGS =
         ITEMS.register("heart_wings", HeartWingsItem::new);
     public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
@@ -136,20 +143,9 @@ public class YizxianMod {
             .defaultTiers()
             .profile(MuramasaItem::buildDefault)
             .register(MuramasaItem::new);
-
-    // ─── 泰拉瑞亚配饰（42 个，M0 阶段空壳） ─────────────────────────
-    /** 42 个泰拉配饰物品供应器。注册名 acc_<id>，由 {@link TerrariaCards#CARDS} 驱动。 */
-    public static final List<Supplier<Item>> TERRARIA_ACCESSORIES = registerTerrariaAccessories();
-
-    private static List<Supplier<Item>> registerTerrariaAccessories() {
-        List<Supplier<Item>> list = new ArrayList<>();
-        for (TerrariaCards.Card card : TerrariaCards.CARDS) {
-            list.add(ITEMS.register(card.regName(),
-                () -> new TerrariaAccessoryItem(card.id(),
-                    new Item.Properties().stacksTo(1))));
-        }
-        return Collections.unmodifiableList(list);
-    }
+    // 霰弹枪 — 远程武器（3D 物品模型，2026-07-18 新增）
+    public static final Supplier<Item> XIAN_DAN_QIANG =
+        ITEMS.register("xian_dan_qiang", XianDanQiangItem::new);
 
     // ─── 创造模式标签页（2026-07-07 重构） ────────────────────────────
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
@@ -186,16 +182,11 @@ public class YizxianMod {
 
     /** 技能 */
     public static final Supplier<CreativeModeTab> SKILL_TAB = tab("skill", "itemGroup.yizxianmod.skill",
-        HEART_WINGS, o -> {
-            // 效果框架已移除 — 技能页不再自动生成效果物品
-        });
+        BEN_LEI_JI, o -> { o.accept(BEN_LEI_JI.get()); o.accept(LEI_MING_DIAN_JIA.get()); });
 
-    /** 饰品 */
-    public static final Supplier<CreativeModeTab> ACCESSORY_TAB = tab("accessory", "itemGroup.yizxianmod.accessory",
-        HEART_WINGS, o -> {
-            o.accept(HEART_WINGS.get());
-            for (var s : TERRARIA_ACCESSORIES) o.accept(s.get());
-        });
+    /** 被动 */
+    public static final Supplier<CreativeModeTab> PASSIVE_TAB = tab("passive", "itemGroup.yizxianmod.passive",
+        TIAN_LEI_YIN, o -> { o.accept(TIAN_LEI_YIN.get()); });
 
     /** 属性卷轴 */
     public static final Supplier<CreativeModeTab> ATTR_SCROLL_TAB = tab("attr_scroll", "itemGroup.yizxianmod.attr_scroll",
@@ -205,6 +196,10 @@ public class YizxianMod {
                 o.accept(AttributeScrollItem.createMinus(attrId));
             }
         });
+
+    /** 远武（远程武器）— 2026-07-18 新增 */
+    public static final Supplier<CreativeModeTab> RANGED_TAB = tab("ranged", "itemGroup.yizxianmod.ranged",
+        XIAN_DAN_QIANG, o -> { o.accept(XIAN_DAN_QIANG.get()); });
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
@@ -265,6 +260,8 @@ public class YizxianMod {
         PlayerDataAPI.register("yizxianmod:combo_step", Codec.INT, -1);
         PlayerDataAPI.register("yizxianmod:combo_tick", Codec.INT, 0);
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
+        // 天雷引充能状态（服务端写，客户端 ChargeHud 读）：{charge, boost}
+        PlayerDataAPI.register("yizxianmod:tianleiyin_state", Codec.STRING, "{}");
 
         // ---- 饰品槽数据（服务器持久化 + copyOnDeath + 客户端同步） ----
         AccessoryContainer.registerDataKeys();
@@ -466,6 +463,8 @@ public class YizxianMod {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
         applyAccessoryArmor(serverPlayer);
         applyAccessoryRegen(serverPlayer);
+        // 雷鸣电甲开关形 tick（与武器持有无关，放最前）
+        net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem.onTick(serverPlayer);
         // 连招 tick 计数
         ItemStack held = serverPlayer.getMainHandItem();
         UUID puid = serverPlayer.getUUID();
