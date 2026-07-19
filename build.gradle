@@ -76,9 +76,6 @@ neoForge {
 
             // Workaround for G1 GC crash on Intel 12th-gen hybrid architecture
             jvmArguments.add '-XX:+UseParallelGC'
-
-            // Java Agent: 前置库 ASM 字节码改写（System.exit 拦截、实体健康值注入等）
-            jvmArguments.add "-javaagent:${project.file('../yiz1.21.1/build/libs/yizmodqzk-agent-1.0.0.jar').absolutePath}"
         }
 
         server {
