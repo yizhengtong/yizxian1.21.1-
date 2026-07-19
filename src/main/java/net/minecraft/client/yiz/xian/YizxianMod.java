@@ -35,12 +35,10 @@ import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 
 import net.minecraft.client.yiz.xian.handler.AccessoryProtectionHandler;
 import net.minecraft.client.yiz.xian.handler.BoostHandler;
-import net.minecraft.client.yiz.xian.handler.terraria.ExtraJumpHandler;
 import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.client.yiz.xian.item.XianDanQiangItem;
 import net.minecraft.client.yiz.xian.network.C2SBoostPayload;
 import net.minecraft.client.yiz.xian.network.C2SExtraJumpBoostPayload;
-import net.minecraft.client.yiz.xian.network.C2SExtraJumpPayload;
 import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -224,12 +222,7 @@ public class YizxianMod {
                 C2SBoostPayload.STREAM_CODEC,
                 C2SBoostPayload::handle
             );
-            // 客户端 → 服务端：请求一次附加跳（多段跳）
-            registrar.playToServer(
-                C2SExtraJumpPayload.TYPE,
-                C2SExtraJumpPayload.STREAM_CODEC,
-                C2SExtraJumpPayload::handle
-            );
+            // 客户端 → 服务端：请求一次附加跳（多段跳）—— 已由 yizmodqzk C2SMultiJumpPayload 接管，删除
             // 客户端 → 服务端：鞘翅飞行时 TAB 请求一次多段跳突进（优先度低于心之翅）
             registrar.playToServer(
                 C2SExtraJumpBoostPayload.TYPE,
@@ -300,11 +293,7 @@ public class YizxianMod {
 
         // 心之翅服务端：恢复 + 悬停锁死 + 落地归零
         NeoForge.EVENT_BUS.addListener(BoostHandler::onPlayerTick);
-        // 附加跳服务端：空中 cap（卸饰品失效清理）+ 落地/登录/重生充满（事件驱动，修空中 onGround 误判 → 无限跳）
-        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerTick);
-        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onLivingFall);
-        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerLogin);
-        NeoForge.EVENT_BUS.addListener(ExtraJumpHandler::onPlayerRespawn);
+        // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管，删除 ExtraJumpHandler 监听
         // 装备保护态：闪避 + 无敌帧
         NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onLivingDamagePost);
         NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onServerTick);

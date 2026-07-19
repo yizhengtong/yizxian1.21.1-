@@ -33,7 +33,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
 import net.minecraft.client.yiz.xian.api.terraria.JumpAttributes;
 import net.minecraft.client.yiz.xian.hud.BoostHud;
-import net.minecraft.client.yiz.xian.hud.ExtraJumpHud;
 import net.minecraft.client.yiz.hud.HudEditorScreen;
 import net.minecraft.client.yiz.xian.hud.HudManager;
 import net.minecraft.client.yiz.xian.hud.HudPositionConfig;
@@ -81,7 +80,6 @@ public class YizxianModClient {
         // ═══ HUD 系统：DEL+ALT 打开编辑器，RenderGuiEvent 分发 ═══
         HudPositionConfig.load();
         HudManager.register(new BoostHud());
-        HudManager.register(new ExtraJumpHud());
         NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
         NeoForge.EVENT_BUS.addListener(YizxianModClient::onHudKeyTick);
 
