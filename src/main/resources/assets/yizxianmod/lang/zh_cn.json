@@ -18,7 +18,6 @@
   "item.yizxianmod.muramasa_3": "精良 村正",
   "item.yizxianmod.muramasa_4": "史诗 村正",
   "item.yizxianmod.muramasa_5": "传说 村正",
-  "item.yizxianmod.heart_wings": "心之翅",
   "item.yizxianmod.xian_dan_qiang": "霰弹枪",
   "item.yizxianmod.tian_lei_yin": "天雷引",
   "item.yizxianmod.ben_lei_ji": "奔雷疾",
@@ -72,8 +71,6 @@
   "itemGroup.yizxianmod.summon": "召唤物",
   "itemGroup.yizxianmod.skill": "技能",
   "key.categories.yizxianmod": "Yiz Xian 模组",
-  "key.yizxianmod.heart_wings_boost": "心之翅推进",
-  "key.yizxianmod.heart_wings_hover": "心之翅悬停",
   "block.yizxianmod.attribute_tester": "属性测试器",
   "item.yizxianmod.attribute_tester": "属性测试器",
   "itemGroup.yizxianmod.work_blocks": "工作方块"

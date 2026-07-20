@@ -3,7 +3,6 @@ package net.minecraft.client.yiz.xian.api;
 import com.mojang.serialization.Codec;
 import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.xian.YizxianMod;
-import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -103,28 +102,7 @@ public class AccessoryContainer extends SimpleContainer {
 
     // ─── 统一能力查询（取代各处重复的"遍历找心之翅"） ──────
 
-    /**
-     * 玩家饰品槽是否装备了心之翅或原版鞘翅。
-     * <p>用 {@link #getIfExists}（不创建空实例），容器不存在时返回 false。
-     * 供飞行/突进/免伤/HUD 等所有能力判定统一调用。</p>
-     */
-    public static boolean hasHeartWings(Player player) {
-        return findElytra(player) != ItemStack.EMPTY;
-    }
-
-    /**
-     * 找到饰品槽里的心之翅或原版鞘翅 ItemStack（找不到返回 {@link ItemStack#EMPTY}）。
-     * <p>用 {@link #getIfExists}，不创建空实例。供渲染层返回真实物品栈用。</p>
-     */
-    public static ItemStack findElytra(Player player) {
-        AccessoryContainer c = getIfExists(player);
-        if (c == null) return ItemStack.EMPTY;
-        for (int i = 0; i < c.getContainerSize(); i++) {
-            ItemStack s = c.getItem(i);
-            if (s.is(Items.ELYTRA) || s.getItem() instanceof HeartWingsItem) return s;
-        }
-        return ItemStack.EMPTY;
-    }
+    /** hasHeartWings/findElytra 已随心之翅系统删除（阶段3C） */
 
     /** 通用查询：饰品槽是否存在满足谓词的物品。 */
     public static boolean hasItem(Player player, Predicate<ItemStack> test) {

@@ -8,8 +8,6 @@ import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
 import net.minecraft.client.yiz.xian.command.YizxianClientCommand;
 import net.minecraft.client.yiz.xian.effect.LockOnProvider;
-import net.minecraft.client.yiz.xian.handler.BoostHandler;
-import net.minecraft.client.yiz.xian.handler.HeartWingsKeyMappings;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
@@ -32,7 +30,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
 import net.minecraft.client.yiz.xian.api.terraria.JumpAttributes;
-import net.minecraft.client.yiz.xian.hud.BoostHud;
 import net.minecraft.client.yiz.hud.HudEditorScreen;
 import net.minecraft.client.yiz.xian.hud.HudManager;
 import net.minecraft.client.yiz.xian.hud.HudPositionConfig;
@@ -48,9 +45,6 @@ public class YizxianModClient {
         // 加载 Blockbench 动画
         BlockbenchAnimParser.load("/assets/yizxianmod/models/animations/attack.bbmodel");
 
-        // 心之翅可配置按键
-        modEventBus.addListener(HeartWingsKeyMappings::register);
-
         // 锁定系统 — 属性驱动锁定框，高优先级
         TargetFrameManager.register(new LockOnProvider());
 
@@ -59,8 +53,7 @@ public class YizxianModClient {
         // 客户端命令：/yizxian panel ...
         NeoForge.EVENT_BUS.addListener(YizxianClientCommand::onRegisterClientCommands);
 
-        // 心之翅推进：客户端按键（服务端恢复/悬停在 YizxianMod 中注册）
-        NeoForge.EVENT_BUS.addListener(BoostHandler::onClientTick);
+        // 心之翅推进(BoostHandler/HeartWingsKeyMappings)已删除（阶段3C）
 
         // 泰拉棱镜渲染 — 直接在世界中绘制浮游剑
         NeoForge.EVENT_BUS.addListener(TerraprismaRenderHandler::onRenderLevel);
@@ -79,7 +72,7 @@ public class YizxianModClient {
 
         // ═══ HUD 系统：DEL+ALT 打开编辑器，RenderGuiEvent 分发 ═══
         HudPositionConfig.load();
-        HudManager.register(new BoostHud());
+        // BoostHud/ExtraJumpHud 已随心之翅/多段跳系统删除（阶段3B/3C）
         NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
         NeoForge.EVENT_BUS.addListener(YizxianModClient::onHudKeyTick);
 

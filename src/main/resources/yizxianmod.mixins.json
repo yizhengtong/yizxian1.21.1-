@@ -14,17 +14,12 @@
     "AutoAttackMixin",
     "PlayerReachMixin",
     "MixinInventoryMenu",
-    "MixinTotemFromAccessory",
-    "MixinElytraFromAccessory",
-    "MixinPlayerAccessoryElytra",
-    "MixinHeartWingsProtection",
-    "MixinHoverLock"
+    "MixinTotemFromAccessory"
   ],
   "client": [
     "AttributeScrollScreenMixin",
     "AbstractContainerScreenAccessor",
-    "MixinInventoryScreen",
-    "MixinElytraLayerRender"
+    "MixinInventoryScreen"
   ],
   "injectors": {
     "defaultRequire": 1

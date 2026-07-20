@@ -21,7 +21,6 @@ import net.minecraft.client.yiz.xian.api.ComboStateMachine;
 import net.minecraft.client.yiz.xian.api.AccessoryContainer;
 import net.minecraft.client.yiz.xian.api.terraria.AccessoryFlags;
 import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
-import net.minecraft.client.yiz.xian.api.terraria.ExtraJumpData;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.client.yiz.xian.item.MeleeWeaponItem;
 import net.minecraft.client.yiz.xian.item.WeaponItem;
@@ -34,11 +33,7 @@ import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 
 import net.minecraft.client.yiz.xian.handler.AccessoryProtectionHandler;
-import net.minecraft.client.yiz.xian.handler.BoostHandler;
-import net.minecraft.client.yiz.xian.item.HeartWingsItem;
 import net.minecraft.client.yiz.xian.item.XianDanQiangItem;
-import net.minecraft.client.yiz.xian.network.C2SBoostPayload;
-import net.minecraft.client.yiz.xian.network.C2SExtraJumpBoostPayload;
 import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -119,8 +114,6 @@ public class YizxianMod {
         ITEMS.register("ben_lei_ji", net.minecraft.client.yiz.xian.skill.BenLeiJiItem::new);
     public static final Supplier<Item> LEI_MING_DIAN_JIA =
         ITEMS.register("lei_ming_dian_jia", net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem::new);
-    public static final Supplier<Item> HEART_WINGS =
-        ITEMS.register("heart_wings", HeartWingsItem::new);
     public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
         ITEMS.register("attribute_scroll", () -> new AttributeScrollItem(new Item.Properties().stacksTo(64)));
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
@@ -166,11 +159,11 @@ public class YizxianMod {
 
     /** 主动法术 */
     public static final Supplier<CreativeModeTab> ACTIVE_SPELL_TAB = tab("active_spell", "itemGroup.yizxianmod.active_spell",
-        HEART_WINGS, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
+        () -> net.minecraft.world.item.Items.STICK, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
 
     /** 被动法术 */
     public static final Supplier<CreativeModeTab> PASSIVE_SPELL_TAB = tab("passive_spell", "itemGroup.yizxianmod.passive_spell",
-        HEART_WINGS, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
+        () -> net.minecraft.world.item.Items.STICK, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
 
     /** 召唤物 */
     public static final Supplier<CreativeModeTab> SUMMON_TAB = tab("summon", "itemGroup.yizxianmod.summon",
@@ -214,21 +207,9 @@ public class YizxianMod {
         // ---- 创造模式标签页 ----
         CREATIVE_MODE_TABS.register(modEventBus);
 
-        // ---- 网络包：C2S 突进请求 + S2C 饰品容器同步 ----
+        // ---- 网络包：S2C 饰品容器同步 + 属性卷轴 ----（C2SBoostPayload/C2SExtraJumpBoostPayload 已随心之翅/突进删除）
         modEventBus.addListener(RegisterPayloadHandlersEvent.class, event -> {
             var registrar = event.registrar(MODID);
-            registrar.playToServer(
-                C2SBoostPayload.TYPE,
-                C2SBoostPayload.STREAM_CODEC,
-                C2SBoostPayload::handle
-            );
-            // 客户端 → 服务端：请求一次附加跳（多段跳）—— 已由 yizmodqzk C2SMultiJumpPayload 接管，删除
-            // 客户端 → 服务端：鞘翅飞行时 TAB 请求一次多段跳突进（优先度低于心之翅）
-            registrar.playToServer(
-                C2SExtraJumpBoostPayload.TYPE,
-                C2SExtraJumpBoostPayload.STREAM_CODEC,
-                C2SExtraJumpBoostPayload::handle
-            );
             // 服务端 → 客户端：推送饰品容器权威快照（_c 唯一数据入口）
             registrar.playToClient(
                 SyncAccessoryPayload.TYPE,
@@ -258,13 +239,7 @@ public class YizxianMod {
 
         // ---- 饰品槽数据（服务器持久化 + copyOnDeath + 客户端同步） ----
         AccessoryContainer.registerDataKeys();
-        // 通用突进数据（心之翅等 BoostProvider 共享池）
-        net.minecraft.client.yiz.xian.api.BoostData.register();
-        // 附加跳数据（多段跳 bitmask，set 自动 S2C 同步）
-        ExtraJumpData.register();
-        // 注册突进来源（两端执行，供服务端 BoostHandler 与客户端 BoostHud 查询）
-        net.minecraft.client.yiz.xian.api.BoostRegistry.register(
-                net.minecraft.client.yiz.xian.api.HeartWingsBoostProvider.INSTANCE);
+        // BoostData/ExtraJumpData/BoostRegistry 已随心之翅/突进系统删除（阶段3C）
 
         // 装备减伤
         DamageReductionRegistry.register((entity, oldHealth, newHealth) -> {
@@ -291,9 +266,8 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
 
-        // 心之翅服务端：恢复 + 悬停锁死 + 落地归零
-        NeoForge.EVENT_BUS.addListener(BoostHandler::onPlayerTick);
-        // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管，删除 ExtraJumpHandler 监听
+        // 心之翅/突进服务端(BoostHandler)已删除（阶段3C）
+        // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管
         // 装备保护态：闪避 + 无敌帧
         NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onLivingDamagePost);
         NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onServerTick);
