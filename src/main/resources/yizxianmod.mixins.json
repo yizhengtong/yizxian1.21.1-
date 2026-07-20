@@ -12,14 +12,11 @@
     "ItemRendererGlowMixin",
     "KillBypassMixin",
     "AutoAttackMixin",
-    "PlayerReachMixin",
-    "MixinInventoryMenu",
-    "MixinTotemFromAccessory"
+    "PlayerReachMixin"
   ],
   "client": [
     "AttributeScrollScreenMixin",
-    "AbstractContainerScreenAccessor",
-    "MixinInventoryScreen"
+    "AbstractContainerScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

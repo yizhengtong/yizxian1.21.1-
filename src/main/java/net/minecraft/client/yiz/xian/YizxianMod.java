@@ -18,9 +18,6 @@ import net.minecraft.client.yiz.weapon.StagedWeaponRegistration;
 import net.minecraft.client.yiz.weapon.WeaponLevelData;
 import net.minecraft.client.yiz.weapon.WeaponProfileRegistry;
 import net.minecraft.client.yiz.xian.api.ComboStateMachine;
-import net.minecraft.client.yiz.xian.api.AccessoryContainer;
-import net.minecraft.client.yiz.xian.api.terraria.AccessoryFlags;
-import net.minecraft.client.yiz.xian.api.terraria.EffectTag;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.client.yiz.xian.item.MeleeWeaponItem;
 import net.minecraft.client.yiz.xian.item.WeaponItem;
@@ -32,10 +29,8 @@ import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 
-import net.minecraft.client.yiz.xian.handler.AccessoryProtectionHandler;
 import net.minecraft.client.yiz.xian.item.XianDanQiangItem;
-import net.minecraft.client.yiz.xian.network.SyncAccessoryPayload;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -60,8 +55,6 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.network.chat.Component;
-import net.minecraft.client.yiz.xian.item.terraria.TerrariaAccessoryItem;
-import net.minecraft.client.yiz.xian.item.terraria.TerrariaCards;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
@@ -92,21 +85,7 @@ public class YizxianMod {
     public static final DeferredRegister<Item> ITEMS =
         DeferredRegister.create(Registries.ITEM, MODID);
 
-    /**
-     * 自定义 DataComponentType 注册（项目首次用，2026-07-06）。
-     * <p>类型安全、语法干净，{@code /give} 可直接用 {@code leather_boots[yizxianmod:jump_attributes={...}]}。</p>
-     */
-    public static final DeferredRegister<net.minecraft.core.component.DataComponentType<?>> DATA_COMPONENTS =
-        DeferredRegister.create(net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE, MODID);
-
-    /** 跳跃属性组件：{@code Map<EffectTag, Float>}，存任意物品的 JUMP_COUNT/HEIGHT/FALL_SAFE/FALL_REDUCCE。 */
-    public static final Supplier<net.minecraft.core.component.DataComponentType<java.util.Map<EffectTag, Float>>> JUMP_ATTRIBUTES =
-        DATA_COMPONENTS.register("jump_attributes",
-            () -> net.minecraft.core.component.DataComponentType
-                .<java.util.Map<EffectTag, Float>>builder()
-                .persistent(net.minecraft.client.yiz.xian.api.terraria.JumpAttrCodec.CODEC)
-                .networkSynchronized(net.minecraft.client.yiz.xian.api.terraria.JumpAttrCodec.STREAM_CODEC)
-                .build());
+    // JUMP_ATTRIBUTES 组件 + DATA_COMPONENTS 已随 terraria 属性子系统删除（阶段3D）
 
     public static final Supplier<Item> TIAN_LEI_YIN =
         ITEMS.register("tian_lei_yin", net.minecraft.client.yiz.xian.skill.TianLeiYinItem::new);
@@ -195,27 +174,15 @@ public class YizxianMod {
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
 
-        // 注册下游 EffectTag 属性到属性编辑台
-        registerEditorEffectTags();
-
         // ---- 物品注册 ----
         ITEMS.register(modEventBus);
-
-        // ---- 自定义 DataComponentType 注册（跳跃属性等） ----
-        DATA_COMPONENTS.register(modEventBus);
 
         // ---- 创造模式标签页 ----
         CREATIVE_MODE_TABS.register(modEventBus);
 
-        // ---- 网络包：S2C 饰品容器同步 + 属性卷轴 ----（C2SBoostPayload/C2SExtraJumpBoostPayload 已随心之翅/突进删除）
+        // ---- 网络包：属性卷轴 ----（SyncAccessoryPayload 已随饰品槽删除）
         modEventBus.addListener(RegisterPayloadHandlersEvent.class, event -> {
             var registrar = event.registrar(MODID);
-            // 服务端 → 客户端：推送饰品容器权威快照（_c 唯一数据入口）
-            registrar.playToClient(
-                SyncAccessoryPayload.TYPE,
-                SyncAccessoryPayload.STREAM_CODEC,
-                SyncAccessoryPayload::handle
-            );
             // 客户端 → 服务端：属性卷轴应用请求
             registrar.playToServer(
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.TYPE,
@@ -237,19 +204,8 @@ public class YizxianMod {
         // 天雷引充能状态（服务端写，客户端 ChargeHud 读）：{charge, boost}
         PlayerDataAPI.register("yizxianmod:tianleiyin_state", Codec.STRING, "{}");
 
-        // ---- 饰品槽数据（服务器持久化 + copyOnDeath + 客户端同步） ----
-        AccessoryContainer.registerDataKeys();
-        // BoostData/ExtraJumpData/BoostRegistry 已随心之翅/突进系统删除（阶段3C）
-
-        // 装备减伤
-        DamageReductionRegistry.register((entity, oldHealth, newHealth) -> {
-            if (!(entity instanceof ServerPlayer player)) return newHealth;
-            float reduction = AccessoryFlags.sumValues(player)
-                .getOrDefault(EffectTag.DAMAGE_REDUCTION, 0f);
-            if (reduction <= 0) return newHealth;
-            float damage = oldHealth - newHealth;
-            return oldHealth - damage * (1f - reduction / 100f);
-        });
+        // 饰品槽系统(AccessoryContainer) + terraria 减伤回调已随 terraria 子系统删除（阶段3D）
+        // 装备减伤现由 yizmodqzk DAMAGE_REDUCTION 属性 + LivingEntityMixin.modifyHealthForHealBan 接管
 
         // ---- JSON 热重载（暂时禁用，排查进世界卡住问题） ----
         // NeoForge.EVENT_BUS.addListener(this::onAddReloadListeners);
@@ -259,18 +215,14 @@ public class YizxianMod {
 
         // ---- 事件 ----
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
-        NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
-        NeoForge.EVENT_BUS.addListener(this::onPlayerRespawn);
         NeoForge.EVENT_BUS.addListener(this::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
 
         // 心之翅/突进服务端(BoostHandler)已删除（阶段3C）
         // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管
-        // 装备保护态：闪避 + 无敌帧
-        NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onLivingDamagePost);
-        NeoForge.EVENT_BUS.addListener(AccessoryProtectionHandler::onServerTick);
+        // 装备保护态(AccessoryProtectionHandler 闪避/无敌帧)已删除（阶段3D）—— 由 yizmodqzk AttackInvulnerabilityTracker 接管
 
         // 锁定系统：属性驱动充能 + 距离延伸
         NeoForge.EVENT_BUS.addListener(LockOnHandler::onPlayerTick);
@@ -424,8 +376,6 @@ public class YizxianMod {
 
     private void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
-        applyAccessoryArmor(serverPlayer);
-        applyAccessoryRegen(serverPlayer);
         // 雷鸣电甲开关形 tick（与武器持有无关，放最前）
         net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem.onTick(serverPlayer);
         // 连招 tick 计数
@@ -446,37 +396,12 @@ public class YizxianMod {
         ComboStateMachine.tick(serverPlayer);
     }
 
-    private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            // 复用既有 _s 实例（InventoryMenu 的 slot 已绑定它），只 reload 内容。
-            // 绝不 discard+换实例 —— 否则 Menu slot 指向旧实例、INSTANCES 指向新实例，
-            // 表现为"取出后还能飞 / 槽位空 / 放入闪烁"的双实例脱节。
-            AccessoryContainer container = AccessoryContainer.get(serverPlayer);
-            container.reloadFromPersist();
-            syncAccessoryToClient(serverPlayer, container);
-        }
-    }
-
-    /** 重生：附件 copyOnDeath 已复制 accessory_items，复用 _s 实例 reload（不 discard，避免 Menu 脱节）。 */
-    private void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            AccessoryContainer container = AccessoryContainer.get(serverPlayer);
-            container.reloadFromPersist();
-            syncAccessoryToClient(serverPlayer, container);
-        }
-    }
-
-    /** 把服务端 _s 权威快照推给客户端 _c（登录/重生/变更时调用）。 */
-    private static void syncAccessoryToClient(ServerPlayer serverPlayer, AccessoryContainer container) {
-        PacketDistributor.sendToPlayer(serverPlayer, new SyncAccessoryPayload(container.getSnapshotSnbt()));
-    }
+    // onPlayerLogin/onPlayerRespawn/syncAccessoryToClient 已随饰品槽系统删除（阶段3D）
 
     /** 玩家退出：清理会心一击的运行时状态与修饰符，避免下次登录残留脏数据。 */
     private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             LockOnHandler.onPlayerLogout(serverPlayer);
-            // 清理饰品槽单例，防止服务器端容器实例随玩家退出泄漏
-            AccessoryContainer.discard(serverPlayer);
         }
     }
 
@@ -523,39 +448,6 @@ public class YizxianMod {
         LOGGER.info("Weapon profile JSON reload listener registered");
     }
 
-    /** 装备属性应用：读取 ARMOR 值，1:1 写到原版护甲值和护甲韧性。每 tick 调用确保装卸即时生效。 */
-    private static void applyAccessoryArmor(ServerPlayer player) {
-        float armor = AccessoryFlags.sumValues(player).getOrDefault(EffectTag.ARMOR, 0f);
-        ItemAttributeHandler.setEntityAttribute(player, Attributes.ARMOR,
-            "acc_armor", armor, AttributeModifier.Operation.ADD_VALUE);
-        ItemAttributeHandler.setEntityAttribute(player, Attributes.ARMOR_TOUGHNESS,
-            "acc_toughness", armor, AttributeModifier.Operation.ADD_VALUE);
-    }
-
-    /** 装备自然回复：LIFE_REGEN_RATE（固定）+ LIFE_REGEN_PCT（百分比），走 Delta 通道。 */
-    private static void applyAccessoryRegen(ServerPlayer player) {
-        if (!player.isAlive()) return;   // 死亡期间停止回复
-        Map<EffectTag, Float> attrs = AccessoryFlags.sumValues(player);
-        float fixedRate = attrs.getOrDefault(EffectTag.LIFE_REGEN_RATE, 0f);
-        float pctRate   = attrs.getOrDefault(EffectTag.LIFE_REGEN_PCT, 0f);
-        if (fixedRate <= 0 && pctRate <= 0) return;
-
-        // 固定：1 点 = 每 tick 0.05 HP；百分比：1 点 = 每 tick 0.05% 最大生命
-        float regenPerTick = fixedRate * 0.05f + player.getMaxHealth() * pctRate * 0.0005f;
-        if (regenPerTick > 0) {
-            YizModQZKAPI.healthRegen(player, regenPerTick);
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  属性编辑台：注册下游 EffectTag 属性
-    // ══════════════════════════════════════════════════════════════
-
-    /**
-     * 属性编辑台 EffectTag 注册 —— 已全部迁移至库 {@code EditableAttribute} 内置列表。
-     * 保留空方法以便后续有纯 FLAG 属性需要注册时使用。
-     */
-    private static void registerEditorEffectTags() {
-        // 所有数值属性已作为 yizmodqzk 原生 Attribute 注册在 EditableAttribute BUILTIN 中
-    }
+    // applyAccessoryArmor/applyAccessoryRegen/registerEditorEffectTags 已随 terraria 子系统删除（阶段3D）
+    // 装备 ARMOR/LIFE_REGEN 现由 yizmodqzk YizAttributes + tizMod.mirrorArmor/AttributeEffectTicker 接管
 }

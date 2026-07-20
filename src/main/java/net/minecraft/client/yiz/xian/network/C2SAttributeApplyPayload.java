@@ -9,7 +9,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.client.yiz.xian.item.AttributeScrollItem;
 import net.minecraft.client.yiz.tool.attribute.ItemAttributeHandler;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -68,7 +67,7 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
         });
     }
 
-    /** 已知 NeoForge 属性 ID 集合（不在其中的按 EffectTag 处理） */
+    /** 已知 NeoForge 属性 ID 集合（仅这些受支持，EffectTag 回退已随 terraria 子系统删除） */
     private static final java.util.Set<String> NEOFORGE_ATTRS = java.util.Set.of(
         "crit_rate", "crit_damage", "life_steal",
         "splash_radius", "splash_damage", "splash_falloff",
@@ -80,55 +79,39 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
         "projectile_reflection", "no_collision", "knockback_immunity", "projectile_immunity"
     );
 
-    /** 从物品读取当前属性值 */
+    /** 从物品读取当前属性值（仅库原生属性） */
     private static double readAttrValue(ItemStack stack, String attrId) {
-        if (NEOFORGE_ATTRS.contains(attrId)) {
-            var holder = net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.getHolder(
-                ResourceLocation.fromNamespaceAndPath("yizmodqzk", attrId));
-            if (holder.isEmpty()) return 0;
-            return ItemAttributeHandler.sumVanillaModifierPublic(stack, holder.get());
-        }
-        // EffectTag 属性
-        try {
-            var tag = net.minecraft.client.yiz.xian.api.terraria.EffectTag.valueOf(attrId.toUpperCase());
-            var attrs = net.minecraft.client.yiz.xian.api.terraria.JumpAttributes.getWithDefaults(stack);
-            return attrs.getOrDefault(tag, 0f);
-        } catch (IllegalArgumentException e) {
-            return 0;
-        }
+        if (!NEOFORGE_ATTRS.contains(attrId)) return 0;
+        var holder = net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.getHolder(
+            ResourceLocation.fromNamespaceAndPath("yizmodqzk", attrId));
+        if (holder.isEmpty()) return 0;
+        return ItemAttributeHandler.sumVanillaModifierPublic(stack, holder.get());
     }
 
-    /** 将属性值写入物品 */
+    /** 将属性值写入物品（仅库原生属性） */
     private static void writeAttrValue(ItemStack stack, String attrId, double value) {
-        if (NEOFORGE_ATTRS.contains(attrId)) {
-            double delta = value - readAttrValue(stack, attrId);
-            switch (attrId) {
-                case "crit_rate"            -> ItemAttributeHandler.addCritRate(stack, delta);
-                case "crit_damage"          -> ItemAttributeHandler.addCritDamage(stack, delta);
-                case "life_steal"           -> ItemAttributeHandler.addLifeSteal(stack, delta);
-                case "splash_radius"        -> ItemAttributeHandler.addSplashRadius(stack, delta);
-                case "splash_damage"        -> ItemAttributeHandler.addSplashDamage(stack, delta);
-                case "splash_falloff"       -> ItemAttributeHandler.addSplashFalloff(stack, delta);
-                case "generic_damage"       -> ItemAttributeHandler.addGenericDamage(stack, delta);
-                case "damage_block"         -> ItemAttributeHandler.addDamageBlock(stack, delta);
-                case "on_hurt"              -> ItemAttributeHandler.addOnHurt(stack, delta);
-                case "counter_rate"         -> ItemAttributeHandler.addCounterRate(stack, delta);
-                case "counter_value"        -> ItemAttributeHandler.addCounterValue(stack, delta);
-                case "counter_count"        -> ItemAttributeHandler.addCounterCount(stack, delta);
-                case "undying"              -> ItemAttributeHandler.addUndying(stack, delta);
-                case "projectile_reflection"-> ItemAttributeHandler.addProjectileReflection(stack, delta);
-                case "no_collision"         -> ItemAttributeHandler.addNoCollision(stack, delta);
-                case "knockback_immunity"   -> ItemAttributeHandler.addKnockbackImmunity(stack, delta);
-                case "projectile_immunity"  -> ItemAttributeHandler.addProjectileImmunity(stack, delta);
-                case "huixin"               -> ItemAttributeHandler.addHuixin(stack, delta);
-                case "kegong"               -> ItemAttributeHandler.addKegong(stack, delta);
-            }
-        } else {
-            // EffectTag 属性 → 直接用 setOne（与 /yizxian attr set 命令一致）
-            try {
-                var tag = net.minecraft.client.yiz.xian.api.terraria.EffectTag.valueOf(attrId.toUpperCase());
-                net.minecraft.client.yiz.xian.api.terraria.JumpAttributes.setOne(stack, tag, (float) value);
-            } catch (IllegalArgumentException ignored) {}
+        if (!NEOFORGE_ATTRS.contains(attrId)) return;
+        double delta = value - readAttrValue(stack, attrId);
+        switch (attrId) {
+            case "crit_rate"            -> ItemAttributeHandler.addCritRate(stack, delta);
+            case "crit_damage"          -> ItemAttributeHandler.addCritDamage(stack, delta);
+            case "life_steal"           -> ItemAttributeHandler.addLifeSteal(stack, delta);
+            case "splash_radius"        -> ItemAttributeHandler.addSplashRadius(stack, delta);
+            case "splash_damage"        -> ItemAttributeHandler.addSplashDamage(stack, delta);
+            case "splash_falloff"       -> ItemAttributeHandler.addSplashFalloff(stack, delta);
+            case "generic_damage"       -> ItemAttributeHandler.addGenericDamage(stack, delta);
+            case "damage_block"         -> ItemAttributeHandler.addDamageBlock(stack, delta);
+            case "on_hurt"              -> ItemAttributeHandler.addOnHurt(stack, delta);
+            case "counter_rate"         -> ItemAttributeHandler.addCounterRate(stack, delta);
+            case "counter_value"        -> ItemAttributeHandler.addCounterValue(stack, delta);
+            case "counter_count"        -> ItemAttributeHandler.addCounterCount(stack, delta);
+            case "undying"              -> ItemAttributeHandler.addUndying(stack, delta);
+            case "projectile_reflection"-> ItemAttributeHandler.addProjectileReflection(stack, delta);
+            case "no_collision"         -> ItemAttributeHandler.addNoCollision(stack, delta);
+            case "knockback_immunity"   -> ItemAttributeHandler.addKnockbackImmunity(stack, delta);
+            case "projectile_immunity"  -> ItemAttributeHandler.addProjectileImmunity(stack, delta);
+            case "huixin"               -> ItemAttributeHandler.addHuixin(stack, delta);
+            case "kegong"               -> ItemAttributeHandler.addKegong(stack, delta);
         }
     }
 }
