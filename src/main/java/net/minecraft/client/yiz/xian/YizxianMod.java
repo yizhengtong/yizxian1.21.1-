@@ -29,7 +29,6 @@ import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 
-import net.minecraft.client.yiz.xian.item.XianDanQiangItem;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.minecraft.core.Holder;
@@ -113,9 +112,6 @@ public class YizxianMod {
             .defaultTiers()
             .profile(MuramasaItem::buildDefault)
             .register(MuramasaItem::new);
-    // 霰弹枪 — 远程武器（3D 物品模型，2026-07-18 新增）
-    public static final Supplier<Item> XIAN_DAN_QIANG =
-        ITEMS.register("xian_dan_qiang", XianDanQiangItem::new);
 
     // ─── 创造模式标签页（2026-07-07 重构） ────────────────────────────
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
@@ -167,9 +163,6 @@ public class YizxianMod {
             }
         });
 
-    /** 远武（远程武器）— 2026-07-18 新增 */
-    public static final Supplier<CreativeModeTab> RANGED_TAB = tab("ranged", "itemGroup.yizxianmod.ranged",
-        XIAN_DAN_QIANG, o -> { o.accept(XIAN_DAN_QIANG.get()); });
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");

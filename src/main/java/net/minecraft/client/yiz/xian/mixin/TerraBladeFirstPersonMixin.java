@@ -15,8 +15,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 第一人称：ILeftHandRender 武器统一走右手管线 + 关键帧动画。
- * 非武器物品保留原版渲染，保证兼容。
+ * 第一人称：ILeftHandRender 武器统一走右手管线 + 连招关键帧动画。
  */
 @Mixin(ItemInHandRenderer.class)
 public abstract class TerraBladeFirstPersonMixin {
@@ -36,11 +35,9 @@ public abstract class TerraBladeFirstPersonMixin {
         ItemInHandRenderer self = (ItemInHandRenderer) (Object) this;
         int animIdx = ComboStateMachine.getCurrentAnimIndex(player);
 
-        // 武器手（有 ILeftHandRender 的手）：关键帧动画
         if (m) renderWeapon(ps, buf, player, light, self, main, animIdx);
         if (o) renderWeapon(ps, buf, player, light, self, off,  animIdx);
 
-        // 非武器手：保留原版渲染（主手 RIGHT，副手 LEFT）
         if (!m && !main.isEmpty()) {
             ps.pushPose();
             ps.translate(0.56F, -0.52F, -0.72F);

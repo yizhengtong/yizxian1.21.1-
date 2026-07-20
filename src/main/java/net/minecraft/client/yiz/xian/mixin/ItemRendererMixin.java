@@ -2,21 +2,20 @@ package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.client.yiz.xian.api.BlockbenchAnimParser;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
-import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 物品渲染拦截：第三人称攻击时替换 display transform 为 ThreadLocal 关键帧。
- * 第一人称 LEFT → RIGHT 重映射保留兼容。
+ * ILeftHandRender 物品左右手重映射。
+ * FIRST_PERSON_LEFT_HAND → FIRST_PERSON_RIGHT_HAND
+ * THIRD_PERSON_RIGHT_HAND → THIRD_PERSON_LEFT_HAND
  */
 @Mixin(ItemRenderer.class)
 public abstract class ItemRendererMixin {
@@ -36,29 +35,6 @@ public abstract class ItemRendererMixin {
     ) {
         if (!(stack.getItem() instanceof ILeftHandRender)) return;
 
-        // ── 第三人称攻击动画：ThreadLocal 传来的关键帧 ──
-        if (context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
-                && net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.isActive()) {
-            float[] kf = net.minecraft.client.yiz.xian.render.ThirdPersonAnimBridge.get();
-            if (kf != null) {
-                ci.cancel();
-                ps.pushPose();
-                ps.translate(-kf[3] / 16f, kf[4] / 16f, kf[5] / 16f); // X 取反修复左右方向
-                ps.mulPose(new Quaternionf().rotationXYZ(
-                    (float)Math.toRadians(kf[0]), (float)Math.toRadians(kf[1]), (float)Math.toRadians(kf[2])));
-                ps.scale(kf[6], kf[7], kf[8]);
-                ps.mulPose(new Quaternionf()
-                    .rotateZ((float)Math.toRadians(BlockbenchAnimParser.elemRotZ))
-                    .rotateY((float)Math.toRadians(BlockbenchAnimParser.elemRotY))
-                    .rotateX((float)Math.toRadians(BlockbenchAnimParser.elemRotX)));
-                ((ItemRenderer)(Object)this).renderStatic(stack, ItemDisplayContext.NONE,
-                    light, overlay, ps, buf, net.minecraft.client.Minecraft.getInstance().level, 0);
-                ps.popPose();
-                return;
-            }
-        }
-
-        // ── 第一/三人称左右手重映射（兼容）──
         if (context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND) {
             ci.cancel();
             ((ItemRenderer)(Object)this).render(
