@@ -92,6 +92,12 @@ public class YizxianMod {
         ITEMS.register("ben_lei_ji", net.minecraft.client.yiz.xian.skill.BenLeiJiItem::new);
     public static final Supplier<Item> LEI_MING_DIAN_JIA =
         ITEMS.register("lei_ming_dian_jia", net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem::new);
+    // 鬼索的狂暴之刃 — 普通版 + 光明版
+    public static final Supplier<Item> GUINSOO_RAGEBLADE =
+        ITEMS.register("guinsoo_rageblade", () -> new net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem(false));
+    public static final Supplier<Item> GUINSOO_RAGEBLADE_BRIGHT =
+        ITEMS.register("guinsoo_rageblade_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem(true));
+
     public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
         ITEMS.register("attribute_scroll", () -> new AttributeScrollItem(new Item.Properties().stacksTo(64)));
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
@@ -144,6 +150,13 @@ public class YizxianMod {
     public static final Supplier<CreativeModeTab> SUMMON_TAB = tab("summon", "itemGroup.yizxianmod.summon",
         () -> TERRAPRISMA_SCROLLS.get(0).get(), o -> {
             for (var s : TERRAPRISMA_SCROLLS) o.accept(s.get());
+        });
+
+    /** 装备 */
+    public static final Supplier<CreativeModeTab> EQUIPMENT_TAB = tab("equipment", "itemGroup.yizxianmod.equipment",
+        GUINSOO_RAGEBLADE, o -> {
+            o.accept(GUINSOO_RAGEBLADE.get());
+            o.accept(GUINSOO_RAGEBLADE_BRIGHT.get());
         });
 
     /** 技能 */
@@ -212,6 +225,7 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
 
         // 心之翅/突进服务端(BoostHandler)已删除（阶段3C）
         // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管
@@ -395,6 +409,13 @@ public class YizxianMod {
     private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             LockOnHandler.onPlayerLogout(serverPlayer);
+        }
+    }
+
+    /** 玩家重生：清空装备叠层（鬼索等），避免死亡残留。 */
+    private void onPlayerClone(PlayerEvent.Clone event) {
+        if (event.isWasDeath() && event.getEntity() instanceof Player player) {
+            net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem.onPlayerDeath(player);
         }
     }
 
