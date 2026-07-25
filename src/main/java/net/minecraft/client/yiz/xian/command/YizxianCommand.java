@@ -29,6 +29,12 @@ public final class YizxianCommand {
                         .executes(YizxianCommand::toggleBypass)
                     )
                 )
+                .then(Commands.literal("precision")
+                    .then(Commands.literal("on")
+                        .executes(ctx -> setPrecision(ctx, true)))
+                    .then(Commands.literal("off")
+                        .executes(ctx -> setPrecision(ctx, false)))
+                )
                 .then(Commands.literal("attr")
                     .then(Commands.literal("set")
                         .then(Commands.argument("attr", StringArgumentType.word())
@@ -67,6 +73,24 @@ public final class YizxianCommand {
             () -> Component.literal(label + " → " + (finalNow ? "§aON" : "§cOFF")),
             true
         );
+        return 1;
+    }
+
+    private static int setPrecision(CommandContext<CommandSourceStack> ctx, boolean on) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer sp = ctx.getSource().getPlayerOrException();
+        var inst = sp.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.PRECISION);
+        if (inst == null) {
+            ctx.getSource().sendFailure(Component.literal("PRECISION 属性未注册到玩家"));
+            return 0;
+        }
+        if (on) {
+            inst.setBaseValue(1.0);
+        } else {
+            inst.setBaseValue(0.0);
+        }
+        ctx.getSource().sendSuccess(
+            () -> Component.literal("精准 PRECISION → " + (on ? "§aON" : "§cOFF")),
+            true);
         return 1;
     }
 

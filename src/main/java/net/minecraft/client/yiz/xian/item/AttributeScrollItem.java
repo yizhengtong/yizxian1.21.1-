@@ -35,8 +35,8 @@ public class AttributeScrollItem extends Item {
     static {
         // NeoForge — 有消费代码（19 个，不含 on_attack/on_tick）
         ATTRIBUTES.put("crit_rate", "暴击率");
-        ATTRIBUTES.put("crit_damage", "暴伤");
-        ATTRIBUTES.put("life_steal", "吸血");
+        ATTRIBUTES.put("crit_damage", "暴击伤害");
+        ATTRIBUTES.put("life_steal", "全能吸血");
         ATTRIBUTES.put("splash_radius", "溅射半径");
         ATTRIBUTES.put("splash_damage", "溅射伤害");
         ATTRIBUTES.put("splash_falloff", "溅射衰减");
@@ -44,11 +44,10 @@ public class AttributeScrollItem extends Item {
         ATTRIBUTES.put("kegong", "渴攻");
         ATTRIBUTES.put("generic_damage", "全伤害");
         ATTRIBUTES.put("damage_block", "格挡");
-        ATTRIBUTES.put("on_hurt", "受击");
         ATTRIBUTES.put("counter_rate", "反击率");
         ATTRIBUTES.put("counter_value", "反击值");
         ATTRIBUTES.put("counter_count", "反击数");
-        ATTRIBUTES.put("undying", "复活");
+        ATTRIBUTES.put("undying", "不死");
         ATTRIBUTES.put("projectile_reflection", "投射物反弹");
         ATTRIBUTES.put("no_collision", "穿过实体");
         ATTRIBUTES.put("knockback_immunity", "击退免疫");
@@ -57,22 +56,22 @@ public class AttributeScrollItem extends Item {
         // 饰品 — 跳跃/移动（8 个，全部有消费）
         ATTRIBUTES.put("jump_count", "跳跃次数");
         ATTRIBUTES.put("jump_height", "跳跃高度");
-        ATTRIBUTES.put("fall_safe", "安全距离");
-        ATTRIBUTES.put("fall_reduce", "摔伤减免");
+        ATTRIBUTES.put("fall_safe", "跌落保护");
+        ATTRIBUTES.put("fall_reduce", "跌落减免");
         ATTRIBUTES.put("move_speed", "移动速度");
         ATTRIBUTES.put("max_run_speed", "最大奔跑速度");
         ATTRIBUTES.put("jump_strength", "跳跃力度");
         ATTRIBUTES.put("air_speed", "空中移速");
 
         // 饰品 — 防御（4 个，有消费）
-        ATTRIBUTES.put("armor", "防御力");
-        ATTRIBUTES.put("damage_reduction", "减伤率");
-        ATTRIBUTES.put("dodge_chance", "闪避率");
+        ATTRIBUTES.put("armor", "护甲抗性");
+        ATTRIBUTES.put("damage_reduction", "伤害减免");
+        ATTRIBUTES.put("dodge_chance", "闪避几率");
         ATTRIBUTES.put("invincibility_mult", "无敌帧");
 
         // 饰品 — 回复（2 个，有消费）
-        ATTRIBUTES.put("life_regen_rate", "生命再生");
-        ATTRIBUTES.put("life_regen_pct", "生命再生%");
+        ATTRIBUTES.put("life_regen_rate", "定量生命回复");
+        ATTRIBUTES.put("life_regen_pct", "百分比生命回复");
     }
 
     public AttributeScrollItem(Properties properties) {

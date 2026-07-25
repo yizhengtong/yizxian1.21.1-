@@ -17,11 +17,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 服务端锁定状态机 + 攻击距离管理。
+ * 服务端锁定状态机 + 交互距离管理。
  *
  * <p>从玩家实体属性读取会心(HUIXIN)/渴攻(KEGONG)，
  * 在服务端独立追踪充能进度。充能完成时给玩家挂载
- * ENTITY_INTERACTION_RANGE 修饰符使攻击距离延至会心值格。
+ * ENTITY_INTERACTION_RANGE 修饰符使交互距离延至会心值格。
  * 攻击命中后移除修饰符并重置充能。</p>
  *
  * <h3>默认互补值</h3>

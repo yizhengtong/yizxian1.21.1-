@@ -97,6 +97,29 @@ public class YizxianMod {
         ITEMS.register("guinsoo_rageblade", () -> new net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem(false));
     public static final Supplier<Item> GUINSOO_RAGEBLADE_BRIGHT =
         ITEMS.register("guinsoo_rageblade_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem(true));
+    // 无尽之刃
+    public static final Supplier<Item> INFINITY_EDGE =
+        ITEMS.register("infinity_edge", () -> new net.minecraft.client.yiz.xian.item.equipment.InfinityEdgeItem(false));
+    public static final Supplier<Item> INFINITY_EDGE_BRIGHT =
+        ITEMS.register("infinity_edge_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.InfinityEdgeItem(true));
+    // 卢安娜的飓风
+    public static final Supplier<Item> RUNAAN_HURRICANE =
+        ITEMS.register("runaan_hurricane", () -> new net.minecraft.client.yiz.xian.item.equipment.RunaanHurricaneItem(false));
+    public static final Supplier<Item> RUNAAN_HURRICANE_BRIGHT =
+        ITEMS.register("runaan_hurricane_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.RunaanHurricaneItem(true));
+    // 疾射火炮
+    public static final Supplier<Item> RAPID_FIRECANNON =
+        ITEMS.register("rapid_firecannon", () -> new net.minecraft.client.yiz.xian.item.equipment.RapidFirecannonItem(false));
+    public static final Supplier<Item> RAPID_FIRECANNON_BRIGHT =
+        ITEMS.register("rapid_firecannon_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.RapidFirecannonItem(true));
+    // 珠光莲花（护手）
+    public static final Supplier<Item> JEWELED_LOTUS =
+        ITEMS.register("jeweled_lotus", () -> new net.minecraft.client.yiz.xian.item.equipment.JeweledLotusItem(false));
+    public static final Supplier<Item> JEWELED_LOTUS_BRIGHT =
+        ITEMS.register("jeweled_lotus_bright", () -> new net.minecraft.client.yiz.xian.item.equipment.JeweledLotusItem(true));
+    // 卢登的激荡（单版奥恩神器）
+    public static final Supplier<Item> LUDENS_ECHO =
+        ITEMS.register("ludens_echo", () -> new net.minecraft.client.yiz.xian.item.equipment.LudensEchoItem());
 
     public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
         ITEMS.register("attribute_scroll", () -> new AttributeScrollItem(new Item.Properties().stacksTo(64)));
@@ -157,6 +180,15 @@ public class YizxianMod {
         GUINSOO_RAGEBLADE, o -> {
             o.accept(GUINSOO_RAGEBLADE.get());
             o.accept(GUINSOO_RAGEBLADE_BRIGHT.get());
+            o.accept(INFINITY_EDGE.get());
+            o.accept(INFINITY_EDGE_BRIGHT.get());
+            o.accept(RUNAAN_HURRICANE.get());
+            o.accept(RUNAAN_HURRICANE_BRIGHT.get());
+            o.accept(RAPID_FIRECANNON.get());
+            o.accept(RAPID_FIRECANNON_BRIGHT.get());
+            o.accept(JEWELED_LOTUS.get());
+            o.accept(JEWELED_LOTUS_BRIGHT.get());
+            o.accept(LUDENS_ECHO.get());
         });
 
     /** 技能 */
@@ -209,6 +241,8 @@ public class YizxianMod {
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
         // 天雷引充能状态（服务端写，客户端 ChargeHud 读）：{charge, boost}
         PlayerDataAPI.register("yizxianmod:tianleiyin_state", Codec.STRING, "{}");
+        // Guinsoo 叠层（服务端写，客户端 BuffHud 读）：6 槽层数，逗号分隔
+        PlayerDataAPI.register("yizxianmod:guinsoo_stacks", Codec.STRING, "0,0,0,0,0,0");
 
         // 饰品槽系统(AccessoryContainer) + terraria 减伤回调已随 terraria 子系统删除（阶段3D）
         // 装备减伤现由 yizmodqzk DAMAGE_REDUCTION 属性 + LivingEntityMixin.modifyHealthForHealBan 接管
@@ -385,6 +419,8 @@ public class YizxianMod {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
         // 雷鸣电甲开关形 tick（与武器持有无关，放最前）
         net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem.onTick(serverPlayer);
+        // 卢登激荡：延迟溅射 tick（按维度处理到期连锁）
+        net.minecraft.client.yiz.xian.item.equipment.LudensEchoItem.tick(serverPlayer.serverLevel());
         // 连招 tick 计数
         ItemStack held = serverPlayer.getMainHandItem();
         UUID puid = serverPlayer.getUUID();
@@ -429,6 +465,8 @@ public class YizxianMod {
         if (event.getEntity() instanceof Player player && !player.level().isClientSide) {
             LockOnHandler.onPlayerDeath(player);
         }
+        // 卢登的激荡：玩家击杀非玩家目标时溅射
+        net.minecraft.client.yiz.xian.item.equipment.LudensEchoItem.onLivingDeath(event);
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {

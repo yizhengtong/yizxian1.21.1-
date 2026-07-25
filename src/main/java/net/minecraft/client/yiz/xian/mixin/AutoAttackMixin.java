@@ -2,6 +2,7 @@ package net.minecraft.client.yiz.xian.mixin;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -10,10 +11,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 自动攻击 Mixin，两触发源（任一满足即生效）：
+ * 自动攻击 Mixin，三触发源（任一满足即生效）：
  * <ol>
  *   <li><b>ILeftHandRender 武器</b>（泰拉刃等）：按住攻击键 + 冷却满 → 自动攻击</li>
  *   <li><b>自动攻击附魔</b>（yizmodqzk:auto_attack）：持有附魔物品时按住攻击键 + 冷却满 → 自动攻击</li>
+ *   <li><b>自动攻击属性</b>（yizmodqzk:auto_attack，疾射火炮等装备授予）：装备时按住攻击键 + 冷却满 → 自动攻击（免附魔）</li>
  * </ol>
  */
 @Mixin(Minecraft.class)
@@ -36,6 +38,11 @@ public abstract class AutoAttackMixin {
         }
         // 条件 2：自动攻击附魔 + 按住攻击键
         else if (hasAutoAttackEnchantment(player)
+                 && Minecraft.getInstance().options.keyAttack.isDown()) {
+            shouldAttack = true;
+        }
+        // 条件 3：自动攻击属性（疾射火炮等装备授予，免附魔）+ 按住攻击键
+        else if (player.getAttributeValue(YizAttributes.AUTO_ATTACK) > 0
                  && Minecraft.getInstance().options.keyAttack.isDown()) {
             shouldAttack = true;
         }

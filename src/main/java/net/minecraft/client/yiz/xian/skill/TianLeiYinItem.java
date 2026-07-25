@@ -82,7 +82,7 @@ public class TianLeiYinItem extends Item implements IPassiveItem {
         // 注意：COOLDOWN_REDUCTION 不在此挂（E1：攒满 6 层才给 transient 冷却缩减）。
         // 保留伤害/回血系数供其他系统引用，冷却完全由 onAttack 攒满驱动。
         return ItemAttributeModifiers.builder()
-            .add(YizAttributes.DAMAGE_BASE,         mod("tly_db", 1.7), EquipmentSlotGroup.ANY)
+            .add(YizAttributes.DAMAGE_BASE,         mod("tly_db", 2.0), EquipmentSlotGroup.ANY)
             .add(YizAttributes.DAMAGE_SPELL_COEFF,  mod("tly_dsc", 45), EquipmentSlotGroup.ANY)
             .add(YizAttributes.HEAL_BASE,           mod("tly_hb", 0.75), EquipmentSlotGroup.ANY)
             .add(YizAttributes.HEAL_HP_COEFF,       mod("tly_hhc", 1.2), EquipmentSlotGroup.ANY)
@@ -147,12 +147,11 @@ public class TianLeiYinItem extends Item implements IPassiveItem {
         writeState(sp);
     }
 
-    /** 天雷引强化攻击的感电伤害 = DAMAGE_BASE + 有效法强×DAMAGE_SPELL_COEFF/100。 */
+    /** 天雷引强化攻击的感电伤害 = DAMAGE_BASE × 有效法强/100。 */
     private static float computeShockDamage(ServerPlayer sp, ItemStack stack) {
         double base = readItemAttr(stack, YizAttributes.DAMAGE_BASE);
-        double coeff = readItemAttr(stack, YizAttributes.DAMAGE_SPELL_COEFF);
         double spellPow = YizAttributes.getEffectiveSpellPower(sp);
-        return (float) (base + spellPow * coeff / 100.0);
+        return (float) (base * spellPow / 100.0);
     }
 
     private static double readItemAttr(ItemStack stack,

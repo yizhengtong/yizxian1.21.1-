@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 覆写 entityInteractionRange() 返回自定义武器攻击距离。
+ * 覆写 entityInteractionRange() 返回自定义武器交互距离。
  * 具体逻辑委托给 {@link WeaponReachHelper}，避免 Mixin 类直接引用 mod 物品类引发类加载死锁。
  *
  * <p>锁定系统的距离延伸作为标准 AttributeModifier 挂载在

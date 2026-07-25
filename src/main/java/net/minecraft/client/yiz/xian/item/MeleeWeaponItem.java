@@ -98,7 +98,7 @@ public class MeleeWeaponItem extends SwordItem
                     AttributeModifier.Operation.ADD_VALUE),
                 EquipmentSlotGroup.MAINHAND);
 
-        // 注：攻击距离不通过 ItemAttributeModifiers（ENTITY_INTERACTION_RANGE 不接受物品属性修饰符），
+        // 注：交互距离不通过 ItemAttributeModifiers（ENTITY_INTERACTION_RANGE 不接受物品属性修饰符），
         // 改为 Mixin 注入 Player.entityInteractionRange() 直接覆写返回值。
 
         var attrs = builder.build();
@@ -167,7 +167,7 @@ public class MeleeWeaponItem extends SwordItem
             "§9暴伤 §f+" + String.format("%.0f%%", cd)));
         double ls = d.getExtra("lifeSteal");
         if (ls > 0) tooltip.add(Component.literal(
-            "§9吸血 §f" + String.format("%.0f%%", ls)));
+            "§9全能吸血 §f" + String.format("%.0f%%", ls)));
         double sr = d.getExtra("splashRadius");
         double sd = d.getExtra("splashDmg");
         double sf = d.getExtra("splashFalloff");

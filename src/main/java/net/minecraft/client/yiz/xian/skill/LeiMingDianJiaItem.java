@@ -56,8 +56,8 @@ public class LeiMingDianJiaItem extends Item implements ISkillItem {
     public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
         var player = net.minecraft.client.Minecraft.getInstance().player;
         double sp = player != null ? YizAttributes.getEffectiveSpellPower(player) : 0;
-        int dmg = (int)(1 + sp * 0.12);
-        double shield = 1 + sp * 0.0125;
+        int dmg = (int)(sp / 100.0);      // 基础值 1 × 法强%
+        double shield = sp / 100.0;        // 基础值 1 × 法强%
 
         tooltip.add(Component.literal("§9雷鸣电甲"));
         tooltip.add(Component.literal("§7开关形 · 开启后自身化为雷霆之源"));
@@ -124,8 +124,8 @@ public class LeiMingDianJiaItem extends Item implements ISkillItem {
         }
 
         double spellPow = YizAttributes.getEffectiveSpellPower(player);
-        float baseDmg = (float)(1 + spellPow * 0.12);
-        float baseShield = (float)(1 + spellPow * 0.0125);
+        float baseDmg = (float)(spellPow / 100.0);    // 基础值 1 × 法强%
+        float baseShield = (float)(spellPow / 100.0);  // 基础值 1 × 法强%
         float baseCost = 0.425f; // 8.5/s → 0.425/tick
 
         // 大槽：伤害×2，蓝耗÷2
