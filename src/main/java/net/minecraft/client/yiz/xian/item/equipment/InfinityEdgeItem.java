@@ -17,12 +17,12 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 
 /**
- * 无尽之刃 — 暴击率超过 100% 的部分 1:1 转化为暴击效果。
+ * 无尽之刃 — 提供暴击率+暴击伤害，暴击率超过 100% 的部分 1:1 转化为暴击伤害。
  *
  * <pre>
  *              普通版      光明版
- *  攻击强度    35%        70%   (按百分比增幅伤害)
- *  暴击率     75%        150%
+ *  暴击率     35%        70%
+ *  暴击伤害   25%        50%
  * </pre>
  */
 public class InfinityEdgeItem extends Item implements IEquipmentItem, IPassiveItem {
@@ -40,13 +40,13 @@ public class InfinityEdgeItem extends Item implements IEquipmentItem, IPassiveIt
     private static ItemAttributeModifiers buildModifiers(boolean bright) {
         double m = bright ? 2.0 : 1.0;
         return ItemAttributeModifiers.builder()
-            .add(YizAttributes.ATTACK_STRENGTH,
-                new AttributeModifier(ResourceLocation.parse("yizxianmod:ie_as"),
-                    35.0 * m, AttributeModifier.Operation.ADD_VALUE),
-                net.minecraft.world.entity.EquipmentSlotGroup.ANY)
             .add(YizAttributes.CRIT_RATE,
                 new AttributeModifier(ResourceLocation.parse("yizxianmod:ie_cr"),
-                    75.0 * m, AttributeModifier.Operation.ADD_VALUE),
+                    35.0 * m, AttributeModifier.Operation.ADD_VALUE),
+                net.minecraft.world.entity.EquipmentSlotGroup.ANY)
+            .add(YizAttributes.CRIT_DAMAGE,
+                new AttributeModifier(ResourceLocation.parse("yizxianmod:ie_cd"),
+                    25.0 * m, AttributeModifier.Operation.ADD_VALUE),
                 net.minecraft.world.entity.EquipmentSlotGroup.ANY)
             .build();
     }
@@ -82,9 +82,7 @@ public class InfinityEdgeItem extends Item implements IEquipmentItem, IPassiveIt
     }
 
     /**
-     * 暴击溢出 → 暴伤：暴击率超过 100% 的部分 <b>固定 1:1</b> 转化为暴击伤害。
-     * <p>光明版<b>不享受倍率</b>（不两倍转化）——仅暴击率数值本身随 2× 倍率更高、溢出量更大，
-     * 但每点溢出仍只换 1 点暴伤。此比率固定，勿改成 2×。</p>
+     * 暴击溢出 → 暴伤：暴击率超过 100% 的部分 1:1 转化为暴击伤害。
      */
     private void syncOverflow(Player player) {
         var cri = player.getAttribute(YizAttributes.CRIT_RATE);

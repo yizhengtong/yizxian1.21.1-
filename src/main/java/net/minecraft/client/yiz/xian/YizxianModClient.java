@@ -111,6 +111,14 @@ public class YizxianModClient {
             }
         });
 
+        // ═══ 光明指南针 GUI：Menu → Screen 绑定 ═══
+        modEventBus.addListener(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent.class, event -> {
+            event.register(
+                net.minecraft.client.yiz.xian.menu.YizxianMenus.LIGHT_COMPASS_MENU.get(),
+                net.minecraft.client.yiz.xian.client.screen.LightCompassScreen::new
+            );
+        });
+
         // 注意：不要在这里 setSyncCallback —— 它会覆盖前置库 NetworkHandler 注入的
         // 网络同步回调（PlayerDataAPI.set → 发 SyncPlayerDataPayload 到客户端），
         // 一旦覆盖，服务端所有 PlayerDataAPI 变更都不再同步到客户端（GUI 空、HUD 看不到恢复等）。

@@ -161,14 +161,6 @@ public class YizxianMod {
             for (var s : MURAMASAS) o.accept(s.get());
         });
 
-    /** 主动法术 */
-    public static final Supplier<CreativeModeTab> ACTIVE_SPELL_TAB = tab("active_spell", "itemGroup.yizxianmod.active_spell",
-        () -> net.minecraft.world.item.Items.STICK, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
-
-    /** 被动法术 */
-    public static final Supplier<CreativeModeTab> PASSIVE_SPELL_TAB = tab("passive_spell", "itemGroup.yizxianmod.passive_spell",
-        () -> net.minecraft.world.item.Items.STICK, o -> { o.accept(net.minecraft.world.item.Items.STICK); });
-
     /** 召唤物 */
     public static final Supplier<CreativeModeTab> SUMMON_TAB = tab("summon", "itemGroup.yizxianmod.summon",
         () -> TERRAPRISMA_SCROLLS.get(0).get(), o -> {
@@ -208,6 +200,20 @@ public class YizxianMod {
             }
         });
 
+    // ── 辅助物品 ──────────────────────────────────────────────
+
+    public static final Supplier<Item> BRIGHT_ENDER_EYE =
+        ITEMS.register("bright_ender_eye", () -> new Item(new Item.Properties()));
+    public static final Supplier<Item> BRIGHT_COMPASS =
+        ITEMS.register("bright_compass", () -> new net.minecraft.client.yiz.xian.item.BrightCompassItem(new Item.Properties().stacksTo(1)));
+
+    /** 辅助物 */
+    public static final Supplier<CreativeModeTab> AUXILIARY_TAB = tab("auxiliary", "itemGroup.yizxianmod.auxiliary",
+        BRIGHT_ENDER_EYE, o -> {
+            o.accept(BRIGHT_ENDER_EYE.get());
+            o.accept(BRIGHT_COMPASS.get());
+        });
+
 
     public YizxianMod(IEventBus modEventBus) {
         LOGGER.info("Yiz Xian Mod initializing...");
@@ -218,6 +224,9 @@ public class YizxianMod {
         // ---- 创造模式标签页 ----
         CREATIVE_MODE_TABS.register(modEventBus);
 
+        // ---- 容器 Menu 注册（光明指南针等）----
+        net.minecraft.client.yiz.xian.menu.YizxianMenus.register(modEventBus);
+
         // ---- 网络包：属性卷轴 ----（SyncAccessoryPayload 已随饰品槽删除）
         modEventBus.addListener(RegisterPayloadHandlersEvent.class, event -> {
             var registrar = event.registrar(MODID);
@@ -226,6 +235,12 @@ public class YizxianMod {
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.TYPE,
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.STREAM_CODEC,
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload::handle
+            );
+            // 客户端 → 服务端：光明指南针工作槽放入/移除
+            registrar.playToServer(
+                net.minecraft.client.yiz.xian.network.C2SLightCompassWorkSlotPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.C2SLightCompassWorkSlotPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.C2SLightCompassWorkSlotPayload::handle
             );
         });
 
@@ -239,6 +254,9 @@ public class YizxianMod {
         PlayerDataAPI.register("yizxianmod:combo_step", Codec.INT, -1);
         PlayerDataAPI.register("yizxianmod:combo_tick", Codec.INT, 0);
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
+        // 光明指南针工作槽（3 个 Item 注册表 ID，-1 表空位；绑玩家持久化）
+        PlayerDataAPI.register("yizxianmod:light_compass_work_slots",
+            Codec.INT.listOf(), java.util.List.of());
         // 天雷引充能状态（服务端写，客户端 ChargeHud 读）：{charge, boost}
         PlayerDataAPI.register("yizxianmod:tianleiyin_state", Codec.STRING, "{}");
         // Guinsoo 叠层（服务端写，客户端 BuffHud 读）：6 槽层数，逗号分隔
@@ -384,7 +402,9 @@ public class YizxianMod {
                 float smoothMul = edgeMul + (1.0f - edgeMul) * (1.0f - t * t);
                 float dmg = baseDamage * (splashPct / 100.0f) * smoothMul;
                 if (dmg > 0) {
-                    target.hurt(source, dmg);
+                    // 用无直接实体的 DamageSource 防止 modifyHurtAmount 二次放大
+                    target.hurt(new net.minecraft.world.damagesource.DamageSource(
+                        source.typeHolder(), null, player), dmg);
                 }
             }
         } finally {

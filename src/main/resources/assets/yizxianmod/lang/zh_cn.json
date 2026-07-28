@@ -35,12 +35,15 @@
   "item.yizxianmod.ben_lei_ji": "奔雷疾",
   "item.yizxianmod.lei_ming_dian_jia": "雷鸣电甲",
   "itemGroup.yizxianmod.melee": "近战武器",
-  "itemGroup.yizxianmod.ranged": "远武",
   "itemGroup.yizxianmod.skill": "技能",
   "itemGroup.yizxianmod.passive": "被动",
   "itemGroup.yizxianmod.summon": "召唤物",
   "key.categories.yizxianmod": "Yiz Xian 模组",
   "block.yizxianmod.attribute_tester": "属性测试器",
   "item.yizxianmod.attribute_tester": "属性测试器",
-  "itemGroup.yizxianmod.work_blocks": "工作方块"
+  "itemGroup.yizxianmod.auxiliary": "辅助物",
+  "item.yizxianmod.bright_ender_eye": "光明末影之眼",
+  "item.yizxianmod.bright_compass": "光明指南针",
+  "container.yizxianmod.light_compass": "光明指南针",
+  "container.yizxianmod.light_compass.search": "搜索物品"
 }

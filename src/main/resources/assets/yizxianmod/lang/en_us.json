@@ -16,8 +16,11 @@
   "item.yizxianmod.xian_dan_qiang": "Shotgun",
   "item.yizxianmod.tian_lei_yin": "Tian Lei Yin",
   "item.yizxianmod.ben_lei_ji": "Ben Lei Ji",
-  "itemGroup.yizxianmod.ranged": "Ranged",
   "block.yizxianmod.attribute_tester": "Attribute Tester",
   "item.yizxianmod.attribute_tester": "Attribute Tester",
-  "itemGroup.yizxianmod.work_blocks": "Work Blocks"
+  "itemGroup.yizxianmod.auxiliary": "Auxiliary",
+  "item.yizxianmod.bright_ender_eye": "Bright Eye of Ender",
+  "item.yizxianmod.bright_compass": "Bright Compass",
+  "container.yizxianmod.light_compass": "Bright Compass",
+  "container.yizxianmod.light_compass.search": "Search items"
 }

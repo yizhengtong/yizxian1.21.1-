@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *              普通版      光明版
  *  冷却缩减      6          12
  *  攻击强度    10%        20%
- *  每层 CDR    +2         +4  (COOLDOWN_REDUCTION 值域 0-100)
+ *  每层 CDR    +5         +10  (COOLDOWN_REDUCTION 值域 0-100)
  *  衰减间隔     5 秒/层    5 秒/层 (不翻倍)
  *  层数上限     无上限      无上限
  * </pre>
@@ -47,8 +47,8 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
     private static final String STACKS_KEY = "yizxianmod:guinsoo_stacks";
     /** 衰减计时（服务端临时，不需客户端同步；每槽一个） */
     private static final Map<UUID, long[]> LAST_ATK = new ConcurrentHashMap<>();
-    /** 记录上次 tick 时玩家主手+副手的物品引用，用于检测切换（per-player 共享） */
-    private static final Map<UUID, net.minecraft.world.item.Item[]> LAST_HELD = new ConcurrentHashMap<>();
+    /** 记录上次 tick 时玩家主手+副手的 ItemStack 引用，用 == 检测任意切换（同物品不同实例也触发） */
+    private static final Map<UUID, ItemStack[]> LAST_HELD = new ConcurrentHashMap<>();
 
     private final boolean bright;
 
@@ -93,8 +93,8 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.literal("§9被动·狂暴"));
-        tooltip.add(Component.literal("§7每次攻击叠加攻击间隔缩减（每层 §f+" + (bright ? "4" : "2") + "%§7），§c无上限"));
-        tooltip.add(Component.literal("§7未攻击 5 秒衰减 1 层；切手或死亡清零"));
+        tooltip.add(Component.literal("§7每次攻击叠加攻击速度（每层 §f+" + (bright ? "10" : "5") + "%§7），§c无上限"));
+        tooltip.add(Component.literal("§7未攻击 5 秒衰减 1 层；切手保留50%层数（空手→武器保留20%），死亡清零"));
     }
 
     // ── IEquipmentItem ──────────────────────────────
@@ -131,14 +131,16 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         int slot = findSlot(player, stack);  // 按 stack 引用精确定位当前件槽位
         if (slot < 0) return;
 
-        // 检测主手/副手切换 → 清所有 Guinsoo 槽（切手放弃全部叠层）
+        // 检测主手/副手切换（ItemStack 引用比较，同物品不同实例也触发）
+        // 空手→武器保留 20%，其他情况保留 50%
         UUID uuid = player.getUUID();
-        var mh = player.getMainHandItem().getItem();
-        var oh = player.getOffhandItem().getItem();
-        var last = LAST_HELD.computeIfAbsent(uuid, k -> new net.minecraft.world.item.Item[]{mh, oh});
+        var mh = player.getMainHandItem();
+        var oh = player.getOffhandItem();
+        var last = LAST_HELD.computeIfAbsent(uuid, k -> new ItemStack[]{mh, oh});
         if (last[0] != mh || last[1] != oh) {
+            boolean fromEmpty = last[0].isEmpty();
             last[0] = mh; last[1] = oh;
-            resetAllStacks(player);
+            halveAllStacks(player, fromEmpty ? 0.2 : 0.5);
             return;
         }
 
@@ -206,7 +208,51 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
     }
 
-    /** 清所有槽的叠层 + 对应 CDR 修饰符（切手/死亡调用）。 */
+    /** 切手时所有槽叠层按比例保留（向下取整），重同步修饰符。 */
+    private static void halveAllStacks(Player player, double ratio) {
+        String raw = PlayerDataAPI.get(player, STACKS_KEY);
+        String[] parts = raw.split(",");
+        int[] arr = new int[SLOT_COUNT];
+        for (int i = 0; i < SLOT_COUNT && i < parts.length; i++) {
+            try { arr[i] = Integer.parseInt(parts[i].trim()); } catch (NumberFormatException e) {}
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            arr[i] = (int)(arr[i] * ratio); // ratio×stacks，向下取整
+            if (i > 0) sb.append(",");
+            sb.append(arr[i]);
+        }
+        PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
+        var inst = player.getAttribute(YizAttributes.COOLDOWN_REDUCTION);
+        if (inst != null) {
+            for (int i = 0; i < SLOT_COUNT; i++) {
+                ResourceLocation modId = ResourceLocation.parse(MOD_ID_BASE + "_" + i);
+                inst.removeModifier(modId);
+                if (arr[i] > 0) {
+                    // 需要算出当前槽的 per-stack 值并重建 modifier
+                    // 此处取任意一个已装备的 Guinsoo 实例来获取 per-stack
+                    // 玩家不会同时持有不同 bright 版本的 Guinsoo（同名物品堆叠为同一实例），
+                    // 所以用 first Guinsoo 的 getPerStackCDR 是安全的
+                    double perStack = GuinsooRagebladeItem.getPerStackCDRFromPlayer(player);
+                    inst.addTransientModifier(new AttributeModifier(
+                        modId, perStack * arr[i], AttributeModifier.Operation.ADD_VALUE));
+                }
+            }
+        }
+    }
+
+    /** 从玩家装备中找任意一个 Guinsoo 实例获取其 perStackCDR，找不到返回 0。 */
+    private static double getPerStackCDRFromPlayer(Player player) {
+        var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
+        if (data == null) return 0;
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            if (data.equipment().getItem(i).getItem() instanceof GuinsooRagebladeItem g)
+                return g.getPerStackCDR();
+        }
+        return 0;
+    }
+
+    /** 清所有槽的叠层 + 对应 CDR 修饰符（死亡调用）。 */
     private static void resetAllStacks(Player player) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < SLOT_COUNT; i++) { if (i > 0) sb.append(","); sb.append(0); }
@@ -241,5 +287,5 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
     }
 
     public int getMaxStacks() { return Integer.MAX_VALUE; } // 无上限
-    public double getPerStackCDR() { return bright ? 4.0 : 2.0; }
+    public double getPerStackCDR() { return bright ? 10.0 : 5.0; }
 }

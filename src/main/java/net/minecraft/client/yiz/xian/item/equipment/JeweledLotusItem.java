@@ -20,7 +20,7 @@ import java.util.List;
  * <pre>
  *            普通版    光明版
  *  暴击率    25%      50%
- *  法术强度  2.5      5
+ *  法术强度  25        50
  *  精准      ✓       ✓
  * </pre>
  */
@@ -41,9 +41,9 @@ public class JeweledLotusItem extends Item implements IEquipmentItem {
                 new AttributeModifier(ResourceLocation.parse("yizxianmod:jl_cr"),
                     25.0 * m, AttributeModifier.Operation.ADD_VALUE),
                 net.minecraft.world.entity.EquipmentSlotGroup.ANY)
-            .add(YizAttributes.ATTACK_STRENGTH,
-                new AttributeModifier(ResourceLocation.parse("yizxianmod:jl_as"),
-                    2.5 * m, AttributeModifier.Operation.ADD_VALUE),
+            .add(YizAttributes.SPELL_POWER,
+                new AttributeModifier(ResourceLocation.parse("yizxianmod:jl_sp"),
+                    25.0 * m, AttributeModifier.Operation.ADD_VALUE),
                 net.minecraft.world.entity.EquipmentSlotGroup.ANY)
             .add(YizAttributes.PRECISION,
                 new AttributeModifier(ResourceLocation.parse("yizxianmod:jl_prec"),
