@@ -242,6 +242,12 @@ public class YizxianMod {
                 net.minecraft.client.yiz.xian.network.C2SLightCompassWorkSlotPayload.STREAM_CODEC,
                 net.minecraft.client.yiz.xian.network.C2SLightCompassWorkSlotPayload::handle
             );
+            // 服务端 → 客户端：连招动画索引（攻击事件驱动，取代 combo 每 tick 全量同步）
+            registrar.playToClient(
+                net.minecraft.client.yiz.xian.network.S2CComboAnimPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.S2CComboAnimPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.S2CComboAnimPayload::handle
+            );
         });
 
         // ---- 创造模式物品栏 ----
@@ -250,9 +256,8 @@ public class YizxianMod {
 
         // ---- yiz-qzk integration ----
         PlayerDataAPI.register("yizxgmod:star_body", Codec.BOOL, false);
-        PlayerDataAPI.register("yizxianmod:attack_anim_index", Codec.INT, 0);
-        PlayerDataAPI.register("yizxianmod:combo_step", Codec.INT, -1);
-        PlayerDataAPI.register("yizxianmod:combo_tick", Codec.INT, 0);
+        // combo_step/combo_tick/attack_anim_index 已移除：连招改纯内存 + S2CComboAnimPayload 事件下发，
+        // 不再走 PlayerDataAPI（原实现每 tick 全量同步整个玩家数据 root 到客户端）。
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
         // 光明指南针工作槽（3 个 Item 注册表 ID，-1 表空位；绑玩家持久化）
         PlayerDataAPI.register("yizxianmod:light_compass_work_slots",
@@ -441,7 +446,7 @@ public class YizxianMod {
         net.minecraft.client.yiz.xian.skill.LeiMingDianJiaItem.onTick(serverPlayer);
         // 卢登激荡：延迟溅射 tick（按维度处理到期连锁）
         net.minecraft.client.yiz.xian.item.equipment.LudensEchoItem.tick(serverPlayer.serverLevel());
-        // 连招 tick 计数
+        // 连招切手检测（纯内存 reset，无 tick 计数 —— 超时由 onAttack 惰性判断）
         ItemStack held = serverPlayer.getMainHandItem();
         UUID puid = serverPlayer.getUUID();
         if (!(held.getItem() instanceof ILeftHandRender)) {
@@ -456,7 +461,6 @@ public class YizxianMod {
             ComboStateMachine.reset(serverPlayer);
         }
         LAST_MAIN_HAND.put(puid, held.copy());
-        ComboStateMachine.tick(serverPlayer);
     }
 
     // onPlayerLogin/onPlayerRespawn/syncAccessoryToClient 已随饰品槽系统删除（阶段3D）
@@ -465,6 +469,8 @@ public class YizxianMod {
     private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             LockOnHandler.onPlayerLogout(serverPlayer);
+            // 连招纯内存状态清理（防 Map 内存泄漏）
+            ComboStateMachine.clear(serverPlayer.getUUID());
         }
     }
 
