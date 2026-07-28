@@ -225,31 +225,22 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
         var inst = player.getAttribute(YizAttributes.COOLDOWN_REDUCTION);
         if (inst != null) {
+            var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
             for (int i = 0; i < SLOT_COUNT; i++) {
                 ResourceLocation modId = ResourceLocation.parse(MOD_ID_BASE + "_" + i);
                 inst.removeModifier(modId);
-                if (arr[i] > 0) {
-                    // 需要算出当前槽的 per-stack 值并重建 modifier
-                    // 此处取任意一个已装备的 Guinsoo 实例来获取 per-stack
-                    // 玩家不会同时持有不同 bright 版本的 Guinsoo（同名物品堆叠为同一实例），
-                    // 所以用 first Guinsoo 的 getPerStackCDR 是安全的
-                    double perStack = GuinsooRagebladeItem.getPerStackCDRFromPlayer(player);
-                    inst.addTransientModifier(new AttributeModifier(
-                        modId, perStack * arr[i], AttributeModifier.Operation.ADD_VALUE));
+                if (arr[i] > 0 && data != null) {
+                    // 按该槽实际装备的 Guinsoo 实例取 perStack——
+                    // 不同 bright 版本 perStack 不同（普通5/光明10），必须各槽各取，
+                    // 不能用全局第一个 Guinsoo 的 perStack 代替（混搭时数值会错）。
+                    ItemStack eq = data.equipment().getItem(i);
+                    if (eq.getItem() instanceof GuinsooRagebladeItem g) {
+                        inst.addTransientModifier(new AttributeModifier(
+                            modId, g.getPerStackCDR() * arr[i], AttributeModifier.Operation.ADD_VALUE));
+                    }
                 }
             }
         }
-    }
-
-    /** 从玩家装备中找任意一个 Guinsoo 实例获取其 perStackCDR，找不到返回 0。 */
-    private static double getPerStackCDRFromPlayer(Player player) {
-        var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
-        if (data == null) return 0;
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            if (data.equipment().getItem(i).getItem() instanceof GuinsooRagebladeItem g)
-                return g.getPerStackCDR();
-        }
-        return 0;
     }
 
     /** 清所有槽的叠层 + 对应 CDR 修饰符（死亡调用）。 */
