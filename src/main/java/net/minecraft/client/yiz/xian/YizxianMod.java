@@ -154,6 +154,16 @@ public class YizxianMod {
             .build());
     }
 
+    /** 注册某物品的默认最大堆叠数（仅当用户未自定义时生效）。 */
+    private static void registerDefaultStackSize(String itemId, int size) {
+        try {
+            net.minecraft.client.yiz.core.ItemStackSizeOverride.setIfAbsent(
+                ResourceLocation.parse(itemId), size);
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to register default stack size for {}: {}", itemId, t.getMessage());
+        }
+    }
+
     /** 近战武器 */
     public static final Supplier<CreativeModeTab> MELEE_TAB = tab("melee", "itemGroup.yizxianmod.melee",
         () -> TERRA_BLADES.get(0).get(), o -> {
@@ -206,12 +216,16 @@ public class YizxianMod {
         ITEMS.register("bright_ender_eye", () -> new Item(new Item.Properties()));
     public static final Supplier<Item> BRIGHT_COMPASS =
         ITEMS.register("bright_compass", () -> new net.minecraft.client.yiz.xian.item.BrightCompassItem(new Item.Properties().stacksTo(1)));
+    /** 堆叠核心：铁砧左槽放目标物品、右槽放本物品，取出后该物品ID最大堆叠数×2（最多2次，封顶99） */
+    public static final Supplier<Item> STACK_CORE =
+        ITEMS.register("stack_core", () -> new Item(new Item.Properties().stacksTo(64)));
 
     /** 辅助物 */
     public static final Supplier<CreativeModeTab> AUXILIARY_TAB = tab("auxiliary", "itemGroup.yizxianmod.auxiliary",
         BRIGHT_ENDER_EYE, o -> {
             o.accept(BRIGHT_ENDER_EYE.get());
             o.accept(BRIGHT_COMPASS.get());
+            o.accept(STACK_CORE.get());
         });
 
 
@@ -256,6 +270,25 @@ public class YizxianMod {
 
         // ---- yiz-qzk integration ----
         PlayerDataAPI.register("yizxgmod:star_body", Codec.BOOL, false);
+
+        // ---- 物品堆叠数默认配置（三类药水 + 桶类 + 附魔书默认 16）----
+        // setIfAbsent：用户用 /yiz stack set 自定义过的不会被覆盖；reset 删除后重启回到此默认值。
+        registerDefaultStackSize("minecraft:potion", 16);            // 可饮用药水
+        registerDefaultStackSize("minecraft:splash_potion", 16);     // 喷溅药水
+        registerDefaultStackSize("minecraft:lingering_potion", 16);  // 滞留药水
+        // 桶类（原版全部 11 种）：空桶 + 各液体/生物桶，统一默认 16
+        registerDefaultStackSize("minecraft:bucket", 16);
+        registerDefaultStackSize("minecraft:water_bucket", 16);
+        registerDefaultStackSize("minecraft:lava_bucket", 16);
+        registerDefaultStackSize("minecraft:milk_bucket", 16);
+        registerDefaultStackSize("minecraft:powder_snow_bucket", 16);
+        registerDefaultStackSize("minecraft:cod_bucket", 16);
+        registerDefaultStackSize("minecraft:salmon_bucket", 16);
+        registerDefaultStackSize("minecraft:pufferfish_bucket", 16);
+        registerDefaultStackSize("minecraft:tropical_fish_bucket", 16);
+        registerDefaultStackSize("minecraft:axolotl_bucket", 16);
+        registerDefaultStackSize("minecraft:tadpole_bucket", 16);
+        registerDefaultStackSize("minecraft:enchanted_book", 16);   // 附魔书
         // combo_step/combo_tick/attack_anim_index 已移除：连招改纯内存 + S2CComboAnimPayload 事件下发，
         // 不再走 PlayerDataAPI（原实现每 tick 全量同步整个玩家数据 root 到客户端）。
         PlayerDataAPI.register("yizxgmod:star_level", Codec.intRange(0, 10), 0);
@@ -275,6 +308,9 @@ public class YizxianMod {
 
         // ---- 暴击判断提前到 CriticalHitEvent，让原版系统处理倍率+粒子+音效 ----
         NeoForge.EVENT_BUS.addListener(this::onCriticalHit);
+
+        // ---- 堆叠核心：铁砧强化物品最大堆叠数 ----
+        NeoForge.EVENT_BUS.register(net.minecraft.client.yiz.xian.item.StackCoreAnvilHandler.class);
 
         // ---- 事件 ----
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
