@@ -10,8 +10,12 @@ import net.minecraft.client.yiz.xian.effect.LockOnProvider;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
+import net.minecraft.client.yiz.xian.item.WupinItem;
 import net.minecraft.client.yiz.xian.render.AnimationPreviewRenderer;
 import net.minecraft.client.yiz.xian.render.EnergyWaveRenderer;
+import net.minecraft.client.yiz.xian.render.ZhaoMingLightClientManager;
+import net.minecraft.client.yiz.xian.render.ZhaoMingLightShaders;
+import net.minecraft.client.yiz.xian.render.ZhaoMingLightWorldRenderer;
 import net.minecraft.client.yiz.xian.render.TerraprismaRenderHandler;
 import net.minecraft.client.yiz.xian.render.glow.GlowEdgeBakedModel;
 import net.minecraft.client.yiz.xian.render.glow.OutlineShaders;
@@ -41,8 +45,6 @@ public class YizxianModClient {
 
         // 锁定系统 — 属性驱动锁定框，高优先级
         TargetFrameManager.register(new LockOnProvider());
-
-        // 属性卷轴交互：由 AttributeScrollScreenMixin 处理
 
         // 客户端命令：/yizxian panel ...
         NeoForge.EVENT_BUS.addListener(YizxianClientCommand::onRegisterClientCommands);
@@ -74,16 +76,27 @@ public class YizxianModClient {
         ShaderManager.registerItemPredicate(
             stack -> stack.getItem() instanceof TerraprismaScrollItem
                   || stack.getItem() instanceof TerraBladeItem
-                  || stack.getItem() instanceof MuramasaItem);
+                  || stack.getItem() instanceof MuramasaItem
+                  || stack.getItem() instanceof WupinItem);
 
-        // ═══ 注册 glow_edge 着色器（含光影兼容保护）═══
+        // ═══ 注册 glow_edge + zhaoming_plasma 着色器（含光影兼容保护）═══
         modEventBus.addListener(RegisterShadersEvent.class, event -> {
             try {
                 OutlineShaders.onRegisterShaders(event);
             } catch (Exception e) {
                 YizxianMod.LOGGER.error("Failed to register glow_edge shader", e);
             }
+            try {
+                ZhaoMingLightShaders.onRegisterShaders(event);
+            } catch (Exception e) {
+                YizxianMod.LOGGER.error("Failed to register zhaoming_plasma shader", e);
+            }
         });
+
+        // ═══ 紫昭明光本地模拟 + 服务端校准（ClientTickEvent 驱动）═══
+        NeoForge.EVENT_BUS.addListener(ZhaoMingLightClientManager::onClientTick);
+        // ═══ 紫昭明光世界渲染（读本地模拟 FX，RenderLevelStageEvent 绘制）═══
+        NeoForge.EVENT_BUS.addListener(ZhaoMingLightWorldRenderer::onRenderLevelStage);
 
         // ═══ 模型烘焙修饰 — 分级发光色 ═══
         modEventBus.addListener(ModelEvent.ModifyBakingResult.class, event -> {
@@ -92,15 +105,20 @@ public class YizxianModClient {
                 BakedModel model = entry.getValue();
                 if (!key.id().getPath().contains("terraprisma_scroll")
                         && !key.id().getPath().contains("terra_blade")
-                        && !key.id().getPath().contains("muramasa")) continue;
+                        && !key.id().getPath().contains("muramasa")
+                        && !key.id().getPath().contains("wupin")) continue;
                 if (model instanceof GlowEdgeBakedModel) continue;
 
                 int level = 5; // 默认传说
                 String path = key.id().getPath();
-                int us = path.lastIndexOf('_');
-                if (us >= 0) {
-                    try { level = Integer.parseInt(path.substring(us + 1)); }
-                    catch (NumberFormatException ignored) {}
+                if (path.contains("wupin")) {
+                    level = 4; // 物品 → 史诗
+                } else {
+                    int us = path.lastIndexOf('_');
+                    if (us >= 0) {
+                        try { level = Integer.parseInt(path.substring(us + 1)); }
+                        catch (NumberFormatException ignored) {}
+                    }
                 }
 
                 Vector4f color = StagedItemHelper.glowColorForLevel(level);

@@ -29,7 +29,6 @@ public class MuramasaItem extends MeleeWeaponItem implements ILeftHandRender {
                 1.8,   // 攻击速度 Lv1
                 10,    // 暴击率 Lv1
                 15,    // 暴伤 Lv1
-                5,     // 吸血 Lv1
                 5,     // 溅射半径 Lv1
                 30,    // 溅射伤害 Lv1
                 20,    // 溅射衰减 Lv1

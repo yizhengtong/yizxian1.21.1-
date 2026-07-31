@@ -29,7 +29,6 @@ public class TerraBladeItem extends MeleeWeaponItem implements ILeftHandRender {
                 1.6,   // 攻击速度 Lv1
                 20,    // 暴击率 Lv1
                 20,    // 暴伤 Lv1
-                12,    // 吸血 Lv1
                 6,     // 溅射半径 Lv1
                 50,    // 溅射伤害 Lv1
                 30,    // 溅射衰减 Lv1

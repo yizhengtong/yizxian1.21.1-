@@ -1,0 +1,114 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "yizxianmod:item/wupin"
+  },
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [
+        0,
+        90,
+        55
+      ],
+      "translation": [
+        0,
+        4,
+        2.5
+      ],
+      "scale": [
+        1.7,
+        1.7,
+        0.85
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        0,
+        -90,
+        -55
+      ],
+      "translation": [
+        0,
+        4,
+        2.5
+      ],
+      "scale": [
+        1.7,
+        1.7,
+        0.78
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        93,
+        33
+      ],
+      "translation": [
+        0,
+        7.85,
+        0.8
+      ],
+      "scale": [
+        0.74,
+        0.74,
+        0.5
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        -90,
+        -25
+      ],
+      "translation": [
+        0,
+        8.1,
+        0.3
+      ],
+      "scale": [
+        0.74,
+        0.74,
+        0.5
+      ]
+    },
+    "ground": {
+      "rotation": [
+        0,
+        0,
+        45
+      ],
+      "translation": [
+        0,
+        13,
+        0
+      ],
+      "scale": [
+        1.7,
+        1.7,
+        1
+      ]
+    },
+    "gui": {
+      "rotation": [
+        0,
+        180,
+        -1
+      ]
+    },
+    "fixed": {
+      "scale": [
+        1.4,
+        1.4,
+        0.99
+      ]
+    },
+    "on_shelf": {
+      "scale": [
+        1.7,
+        1.7,
+        1
+      ]
+    }
+  }
+}

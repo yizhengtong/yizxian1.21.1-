@@ -58,9 +58,6 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
             if ("counter_rate".equals(payload.attrId)) {
                 newVal = Math.min(100, Math.max(0, newVal));
             }
-            if ("counter_count".equals(payload.attrId)) {
-                newVal = Math.max(1, newVal);
-            }
 
             writeAttrValue(target, payload.attrId, newVal);
             menu.broadcastChanges();
@@ -74,7 +71,7 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
         "huixin", "kegong",
         "generic_damage", "damage_block",
         "on_hurt",
-        "counter_rate", "counter_value", "counter_count",
+        "counter_rate", "counter_value",
         "undying",
         "projectile_reflection", "no_collision", "knockback_immunity", "projectile_immunity"
     );
@@ -104,7 +101,6 @@ public record C2SAttributeApplyPayload(String attrId, int delta, int slotIndex)
             case "on_hurt"              -> ItemAttributeHandler.addOnHurt(stack, delta);
             case "counter_rate"         -> ItemAttributeHandler.addCounterRate(stack, delta);
             case "counter_value"        -> ItemAttributeHandler.addCounterValue(stack, delta);
-            case "counter_count"        -> ItemAttributeHandler.addCounterCount(stack, delta);
             case "undying"              -> ItemAttributeHandler.addUndying(stack, delta);
             case "projectile_reflection"-> ItemAttributeHandler.addProjectileReflection(stack, delta);
             case "no_collision"         -> ItemAttributeHandler.addNoCollision(stack, delta);

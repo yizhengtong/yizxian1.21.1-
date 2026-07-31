@@ -24,7 +24,6 @@ import net.minecraft.client.yiz.xian.item.WeaponItem;
 
 import net.minecraft.client.yiz.xian.effect.LockOnHandler;
 
-import net.minecraft.client.yiz.xian.item.AttributeScrollItem;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
@@ -120,9 +119,12 @@ public class YizxianMod {
     // 卢登的激荡（单版奥恩神器）
     public static final Supplier<Item> LUDENS_ECHO =
         ITEMS.register("ludens_echo", () -> new net.minecraft.client.yiz.xian.item.equipment.LudensEchoItem());
+    public static final Supplier<Item> EXPLORER_VAMBRACE =
+        ITEMS.register("explorer_vambrace", net.minecraft.client.yiz.xian.item.equipment.ExplorerVambraceItem::new);
+    // 物品（临时占位）
+    public static final Supplier<Item> WUPIN =
+        ITEMS.register("wupin", net.minecraft.client.yiz.xian.item.WupinItem::new);
 
-    public static final Supplier<Item> ATTRIBUTE_SCROLL_ITEM =
-        ITEMS.register("attribute_scroll", () -> new AttributeScrollItem(new Item.Properties().stacksTo(64)));
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
     public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
         StagedWeaponRegistration.<TerraprismaScrollItem>create(ITEMS, MODID, "terraprisma_scroll", 5)
@@ -191,6 +193,8 @@ public class YizxianMod {
             o.accept(JEWELED_LOTUS.get());
             o.accept(JEWELED_LOTUS_BRIGHT.get());
             o.accept(LUDENS_ECHO.get());
+            o.accept(EXPLORER_VAMBRACE.get());
+            o.accept(WUPIN.get());
         });
 
     /** 技能 */
@@ -200,15 +204,6 @@ public class YizxianMod {
     /** 被动 */
     public static final Supplier<CreativeModeTab> PASSIVE_TAB = tab("passive", "itemGroup.yizxianmod.passive",
         TIAN_LEI_YIN, o -> { o.accept(TIAN_LEI_YIN.get()); });
-
-    /** 属性卷轴 */
-    public static final Supplier<CreativeModeTab> ATTR_SCROLL_TAB = tab("attr_scroll", "itemGroup.yizxianmod.attr_scroll",
-        ATTRIBUTE_SCROLL_ITEM, o -> {
-            for (String attrId : AttributeScrollItem.ATTRIBUTES.keySet()) {
-                o.accept(AttributeScrollItem.createPlus(attrId));
-                o.accept(AttributeScrollItem.createMinus(attrId));
-            }
-        });
 
     // ── 辅助物品 ──────────────────────────────────────────────
 
@@ -262,6 +257,24 @@ public class YizxianMod {
                 net.minecraft.client.yiz.xian.network.S2CComboAnimPayload.STREAM_CODEC,
                 net.minecraft.client.yiz.xian.network.S2CComboAnimPayload::handle
             );
+            // 鬼索叠层同步 (S2C)
+            registrar.playToClient(
+                net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload::handle
+            );
+            // 探索者护臂层数同步 (S2C)
+            registrar.playToClient(
+                net.minecraft.client.yiz.xian.network.S2CExplorerStacksPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.S2CExplorerStacksPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.S2CExplorerStacksPayload::handle
+            );
+            // 紫昭明光状态/位置同步 (S2C，服务端权威定位化)
+            registrar.playToClient(
+                net.minecraft.client.yiz.xian.network.S2CZhaoMingLightPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.S2CZhaoMingLightPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.S2CZhaoMingLightPayload::handle
+            );
         });
 
         // ---- 创造模式物品栏 ----
@@ -297,8 +310,7 @@ public class YizxianMod {
             Codec.INT.listOf(), java.util.List.of());
         // 天雷引充能状态（服务端写，客户端 ChargeHud 读）：{charge, boost}
         PlayerDataAPI.register("yizxianmod:tianleiyin_state", Codec.STRING, "{}");
-        // Guinsoo 叠层（服务端写，客户端 BuffHud 读）：6 槽层数，逗号分隔
-        PlayerDataAPI.register("yizxianmod:guinsoo_stacks", Codec.STRING, "0,0,0,0,0,0");
+        // Guinsoo / Explorer 叠层纯内存 + S2C 事件同步，登出/登入经 EquipmentStackPersist（存档目录 JSON）持久化。
 
         // 饰品槽系统(AccessoryContainer) + terraria 减伤回调已随 terraria 子系统删除（阶段3D）
         // 装备减伤现由 yizmodqzk DAMAGE_REDUCTION 属性 + LivingEntityMixin.modifyHealthForHealBan 接管
@@ -314,6 +326,8 @@ public class YizxianMod {
 
         // ---- 事件 ----
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(this::onServerTick);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLogin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
         NeoForge.EVENT_BUS.addListener(this::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
@@ -373,15 +387,7 @@ public class YizxianMod {
         // 暴击已在 CriticalHitEvent 中处理，此处只消费标记防止泄漏
         CritTracker.consume(player);
 
-        // ═══ 吸血系统 ═══
-        float lifeSteal = safeAttr(player, YizAttributes.LIFE_STEAL)
-            + (float) (wld != null ? wld.getExtra("lifeSteal") : 0);
-        if (lifeSteal > 0 && event.getNewDamage() > 0) {
-            float healAmount = event.getNewDamage() * (lifeSteal / 100.0f);
-            if (healAmount > 0) {
-                player.heal(healAmount);
-            }
-        }
+        // 武器固有吸血已移除 — 吸血统一走前置库 LIFE_STEAL 属性。
 
         // ═══ 范围溅射系统 ═══
         float splashRadius = safeAttr(player, YizAttributes.SPLASH_RADIUS)
@@ -476,6 +482,13 @@ public class YizxianMod {
     /** 上一 tick 各玩家的主手物品栈，用于检测「左手武器之间」的切换以重置连招。 */
     private static final java.util.WeakHashMap<UUID, ItemStack> LAST_MAIN_HAND = new java.util.WeakHashMap<>();
 
+    /** 每服务器 tick：驱动紫昭明光服务端 FX（无实体系统）。 */
+    private void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+        for (var level : event.getServer().getAllLevels()) {
+            net.minecraft.client.yiz.xian.fx.ZhaoMingLightManager.getInstance().tick(level);
+        }
+    }
+
     private void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
         // 雷鸣电甲开关形 tick（与武器持有无关，放最前）
@@ -499,12 +512,19 @@ public class YizxianMod {
         LAST_MAIN_HAND.put(puid, held.copy());
     }
 
-    // onPlayerLogin/onPlayerRespawn/syncAccessoryToClient 已随饰品槽系统删除（阶段3D）
+    /** 登入时恢复装备叠层（鬼索 / 探索者护臂，从存档目录 JSON 读）。 */
+    private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer sp) {
+            net.minecraft.client.yiz.xian.core.EquipmentStackPersist.onPlayerLogin(sp);
+        }
+    }
 
     /** 玩家退出：清理会心一击的运行时状态与修饰符，避免下次登录残留脏数据。 */
     private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             LockOnHandler.onPlayerLogout(serverPlayer);
+            // 装备叠层持久化（登出时写存档目录 JSON）
+            net.minecraft.client.yiz.xian.core.EquipmentStackPersist.onPlayerLogout(serverPlayer);
             // 连招纯内存状态清理（防 Map 内存泄漏）
             ComboStateMachine.clear(serverPlayer.getUUID());
         }
@@ -514,6 +534,7 @@ public class YizxianMod {
     private void onPlayerClone(PlayerEvent.Clone event) {
         if (event.isWasDeath() && event.getEntity() instanceof Player player) {
             net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem.onPlayerDeath(player);
+            net.minecraft.client.yiz.xian.item.equipment.ExplorerVambraceItem.onPlayerDeath(player);
         }
     }
 

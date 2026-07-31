@@ -15,7 +15,6 @@
     "PlayerReachMixin"
   ],
   "client": [
-    "AttributeScrollScreenMixin",
     "AbstractContainerScreenAccessor"
   ],
   "injectors": {

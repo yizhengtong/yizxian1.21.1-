@@ -118,6 +118,11 @@ public class TianLeiYinItem extends Item implements IPassiveItem {
     @Override
     public void onAttack(Player player, ItemStack stack, LivingEntity target) {
         if (!(player instanceof ServerPlayer sp) || sp.level().isClientSide()) return;
+        // SPELL 溅射不消耗蓝量
+        if (net.minecraft.client.yiz.core.SpellSourceTracker.isActive()) return;
+        // 每击消耗 1 点蓝量，蓝不够跳过
+        if (!net.minecraft.client.yiz.tool.health.ManaTracker.consume(sp, 1)) return;
+
         var pd = sp.getPersistentData();
 
         // 充能 +1，满 6 清零 + 给 6 次强化 + 冷却缩减立刻生效

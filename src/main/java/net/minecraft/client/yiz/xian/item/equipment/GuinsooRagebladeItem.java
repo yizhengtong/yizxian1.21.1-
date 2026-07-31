@@ -2,12 +2,12 @@ package net.minecraft.client.yiz.xian.item.equipment;
 
 import net.minecraft.client.yiz.api.IEquipmentItem;
 import net.minecraft.client.yiz.api.IPassiveItem;
-import net.minecraft.client.yiz.api.PlayerDataAPI;
 import net.minecraft.client.yiz.attribute.YizAttributes;
 import net.minecraft.client.yiz.hud.BuffHudEntry;
 import net.minecraft.client.yiz.hud.BuffHudRegistry;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.player.Player;
@@ -31,39 +31,40 @@ import java.util.concurrent.ConcurrentHashMap;
  *  冷却缩减      6          12
  *  攻击强度    10%        20%
  *  每层 CDR    +5         +10  (COOLDOWN_REDUCTION 值域 0-100)
- *  衰减间隔     5 秒/层    5 秒/层 (不翻倍)
+ *  衰减间隔     5 秒/层    5 秒/层
  *  层数上限     无上限      无上限
  * </pre>
  *
  * <p>支持多件同装备（多个装备槽各一份）：每件独立叠层，{@link #findSlot} 按 stack 引用
- * 精确定位当前件所在槽。叠层通过 {@link PlayerDataAPI}（key {@value #STACKS_KEY}）存储并
- * 自动 S2C 同步，客户端 {@link BuffHudRegistry} 注册的 HUD 条目据此每件各显示一行。</p>
+ * 精确定位当前件所在槽。层数纯内存 {@link #STACKS} 服务端存、{@link #CLIENT_CACHE} 客户端读，
+ * 通过 {@code S2CGuinsooStacksPayload} 按需同步供 HUD 渲染。</p>
  */
 public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassiveItem {
 
     private static final int DECAY_TICKS = 5 * 20;
-    private static final int SLOT_COUNT = 6;
-    /** 叠层 PlayerDataAPI 键：6 装备槽层数，逗号分隔（服务端写，客户端 BuffHud 读）。 */
-    private static final String STACKS_KEY = "yizxianmod:guinsoo_stacks";
-    /** 衰减计时（服务端临时，不需客户端同步；每槽一个） */
+    public static final int SLOT_COUNT = 6;
+    /** 叠层：纯内存（服务端写，替换原 PlayerDataAPI 每 tick 全量同步）。 */
+    private static final Map<UUID, int[]> STACKS = new ConcurrentHashMap<>();
+    /** 客户端缓存：由 S2CGuinsooStacksPayload 更新，供 HUD 读。 */
+    private static volatile int[] CLIENT_CACHE = new int[SLOT_COUNT];
+    /** 服务端衰减计时 */
     private static final Map<UUID, long[]> LAST_ATK = new ConcurrentHashMap<>();
-    /** 记录上次 tick 时玩家主手+副手的 ItemStack 引用，用 == 检测任意切换（同物品不同实例也触发） */
+    /** 切手检测 */
     private static final Map<UUID, ItemStack[]> LAST_HELD = new ConcurrentHashMap<>();
 
     private final boolean bright;
 
     static {
-        // 类加载时注册 buff HUD 条目：返回所有激活槽的 Display（多件同装备各占一行）
         BuffHudRegistry.register(player -> {
             List<BuffHudEntry.Display> out = new ArrayList<>();
             if (player == null) return out;
+            int[] stacks = getClientStacks(player);
             var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
             if (data == null) return out;
             for (int i = 0; i < SLOT_COUNT; i++) {
                 ItemStack eq = data.equipment().getItem(i);
-                if (eq.getItem() instanceof GuinsooRagebladeItem) {
-                    int stacks = getStacks(player, i);
-                    if (stacks > 0) out.add(new BuffHudEntry.Display(true, eq, stacks));
+                if (eq.getItem() instanceof GuinsooRagebladeItem && stacks[i] > 0) {
+                    out.add(new BuffHudEntry.Display(true, eq, stacks[i]));
                 }
             }
             return out;
@@ -108,31 +109,29 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         if (inst != null) {
             inst.removeModifier(ResourceLocation.parse(MOD_ID_BASE + "_" + slot));
         }
-        setStacks(player, slot, 0);  // 只清卸下的这一槽
+        setStacks(player, slot, 0);
     }
 
-    // ── IPassiveItem: onAttack 叠层（每件各自触发，stack=该槽物品）─────────
+    // ── IPassiveItem: onAttack 叠层 ────────────────
 
     @Override
     public void onAttack(Player player, ItemStack stack, LivingEntity target) {
-        int slot = findSlot(player, stack);  // 按 stack 引用精确定位当前件槽位
+        int slot = findSlot(player, stack);
         if (slot < 0) return;
         long now = player.level().getGameTime();
         ensureArrays(player.getUUID());
-        setStacks(player, slot, getStacks(player, slot) + 1);  // 无叠层上限（CDR 由属性 100% 自然封顶）
+        setStacks(player, slot, getStacks(player, slot) + 1);
         LAST_ATK.get(player.getUUID())[slot] = now;
         syncModifier(player, slot);
     }
 
-    // ── IPassiveItem: onWornTick 衰减 + 切手检测 ────
+    // ── IPassiveItem: onWornTick 衰减 + 切手 ───────
 
     @Override
     public void onWornTick(Player player, ItemStack stack) {
-        int slot = findSlot(player, stack);  // 按 stack 引用精确定位当前件槽位
+        int slot = findSlot(player, stack);
         if (slot < 0) return;
 
-        // 检测主手/副手切换（ItemStack 引用比较，同物品不同实例也触发）
-        // 空手→武器保留 20%，其他情况保留 50%
         UUID uuid = player.getUUID();
         var mh = player.getMainHandItem();
         var oh = player.getOffhandItem();
@@ -144,7 +143,6 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
             return;
         }
 
-        // 衰减：只衰减当前 stack 所在槽
         long now = player.level().getGameTime();
         ensureArrays(uuid);
         long[] la = LAST_ATK.get(uuid);
@@ -161,7 +159,7 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         }
     }
 
-    // ── 动态修饰符同步 ──────────────────────────────
+    // ── 动态修饰符 ──────────────────────────────────
 
     private static final ResourceLocation MOD_ID_BASE = ResourceLocation.parse("yizxianmod:guinsoo_stacks");
 
@@ -177,52 +175,54 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         }
     }
 
-    // ── 叠层读写（PlayerDataAPI，自动 S2C 同步供 HUD 读）─────────
+    // ── 叠层读写（纯内存 + 事件驱动 S2C）─────────────
 
     private static void ensureArrays(UUID uuid) {
+        STACKS.computeIfAbsent(uuid, k -> new int[SLOT_COUNT]);
         LAST_ATK.computeIfAbsent(uuid, k -> new long[SLOT_COUNT]);
     }
 
-    /** 读指定槽层数（客户端也能读，PlayerDataAPI 已 S2C 同步）。 */
-    public static int getStacks(Player player, int slot) {
+    /** 服务端读指定槽层数。 */
+    private static int getStacks(Player player, int slot) {
         if (slot < 0 || slot >= SLOT_COUNT) return 0;
-        String raw = PlayerDataAPI.get(player, STACKS_KEY);
-        String[] parts = raw.split(",");
-        if (slot >= parts.length) return 0;
-        try { return Integer.parseInt(parts[slot].trim()); }
-        catch (NumberFormatException e) { return 0; }
+        int[] arr = STACKS.get(player.getUUID());
+        return arr != null ? arr[slot] : 0;
     }
 
-    /** 写指定槽层数（服务端调用，读改写整串，自动 S2C 同步）。 */
+    /** 服务端写指定槽 + 推 S2C 同步。 */
     private static void setStacks(Player player, int slot, int val) {
         if (slot < 0 || slot >= SLOT_COUNT) return;
-        int[] arr = new int[SLOT_COUNT];
-        String raw = PlayerDataAPI.get(player, STACKS_KEY);
-        String[] parts = raw.split(",");
-        for (int i = 0; i < SLOT_COUNT && i < parts.length; i++) {
-            try { arr[i] = Integer.parseInt(parts[i].trim()); } catch (NumberFormatException e) {}
-        }
+        int[] arr = STACKS.computeIfAbsent(player.getUUID(), k -> new int[SLOT_COUNT]);
         arr[slot] = val;
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < SLOT_COUNT; i++) { if (i > 0) sb.append(","); sb.append(arr[i]); }
-        PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
+        if (player instanceof ServerPlayer sp) {
+            net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.sendTo(sp, arr);
+        }
     }
 
-    /** 切手时所有槽叠层按比例保留（向下取整），重同步修饰符。 */
+    /** S2C payload 回调：写入客户端缓存供 HUD 读。 */
+    public static void cacheClientStacks(int[] stacks) {
+        CLIENT_CACHE = stacks;
+    }
+
+    /** 客户端 HUD 读：走缓存（服务端则直接读内存，但 HUD 只在客户端）。 */
+    public static int[] getClientStacks(Player player) {
+        // 客户端：读 payload 写入的缓存
+        if (player != null && player.level().isClientSide) {
+            return CLIENT_CACHE;
+        }
+        // 服务端：直接读内存
+        return STACKS.getOrDefault(player.getUUID(), new int[SLOT_COUNT]);
+    }
+
+    // ── 切手/重置 ──────────────────────────────────
+
     private static void halveAllStacks(Player player, double ratio) {
-        String raw = PlayerDataAPI.get(player, STACKS_KEY);
-        String[] parts = raw.split(",");
-        int[] arr = new int[SLOT_COUNT];
-        for (int i = 0; i < SLOT_COUNT && i < parts.length; i++) {
-            try { arr[i] = Integer.parseInt(parts[i].trim()); } catch (NumberFormatException e) {}
+        int[] arr = STACKS.computeIfAbsent(player.getUUID(), k -> new int[SLOT_COUNT]);
+        for (int i = 0; i < SLOT_COUNT; i++) arr[i] = (int) (arr[i] * ratio);
+        if (player instanceof ServerPlayer sp) {
+            net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.sendTo(sp, arr);
         }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            arr[i] = (int)(arr[i] * ratio); // ratio×stacks，向下取整
-            if (i > 0) sb.append(",");
-            sb.append(arr[i]);
-        }
-        PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
+        // 重建各槽 CDR modifier
         var inst = player.getAttribute(YizAttributes.COOLDOWN_REDUCTION);
         if (inst != null) {
             var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
@@ -230,9 +230,6 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
                 ResourceLocation modId = ResourceLocation.parse(MOD_ID_BASE + "_" + i);
                 inst.removeModifier(modId);
                 if (arr[i] > 0 && data != null) {
-                    // 按该槽实际装备的 Guinsoo 实例取 perStack——
-                    // 不同 bright 版本 perStack 不同（普通5/光明10），必须各槽各取，
-                    // 不能用全局第一个 Guinsoo 的 perStack 代替（混搭时数值会错）。
                     ItemStack eq = data.equipment().getItem(i);
                     if (eq.getItem() instanceof GuinsooRagebladeItem g) {
                         inst.addTransientModifier(new AttributeModifier(
@@ -243,11 +240,13 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         }
     }
 
-    /** 清所有槽的叠层 + 对应 CDR 修饰符（死亡调用）。 */
-    private static void resetAllStacks(Player player) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < SLOT_COUNT; i++) { if (i > 0) sb.append(","); sb.append(0); }
-        PlayerDataAPI.set(player, STACKS_KEY, sb.toString());
+    public static void onPlayerDeath(Player player) {
+        UUID uuid = player.getUUID();
+        STACKS.remove(uuid);
+        LAST_ATK.remove(uuid);
+        if (player instanceof ServerPlayer sp) {
+            net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.sendTo(sp, new int[SLOT_COUNT]);
+        }
         var inst = player.getAttribute(YizAttributes.COOLDOWN_REDUCTION);
         if (inst != null) {
             for (int i = 0; i < SLOT_COUNT; i++)
@@ -255,9 +254,8 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         }
     }
 
-    // ── 内部 ────────────────────────────────
+    // ── 内部 ────────────────────────────────────────
 
-    /** 按 stack 引用精确定位当前件所在装备槽（多件同装备时各找各的槽）。 */
     private int findSlot(Player player, ItemStack stack) {
         var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
         if (data == null) return -1;
@@ -267,16 +265,49 @@ public class GuinsooRagebladeItem extends Item implements IEquipmentItem, IPassi
         return -1;
     }
 
-    // ── 公开查询 ────────────────────────────────────
-
     public boolean isBright() { return bright; }
+    public int getMaxStacks() { return Integer.MAX_VALUE; }
+    public double getPerStackCDR() { return bright ? 10.0 : 5.0; }
 
-    /** 死亡时调用：清空该玩家所有叠层。 */
-    public static void onPlayerDeath(Player player) {
-        resetAllStacks(player);
-        LAST_ATK.remove(player.getUUID());
+    // ── 登出持久化 / 登入恢复（JSON 存档目录，见 EquipmentStackPersist）──
+
+    /** 登出时快照当前层数（供 EquipmentStackPersist 写 JSON）。 */
+    @javax.annotation.Nullable
+    public static int[] snapshotStacks(Player player) {
+        int[] arr = STACKS.get(player.getUUID());
+        if (arr == null) return null;
+        boolean allZero = true;
+        for (int i = 0; i < SLOT_COUNT; i++) if (arr[i] != 0) { allZero = false; break; }
+        return allZero ? null : arr;
     }
 
-    public int getMaxStacks() { return Integer.MAX_VALUE; } // 无上限
-    public double getPerStackCDR() { return bright ? 10.0 : 5.0; }
+    /** 登入时从 JSON 数据恢复。 */
+    public static void loadFromPersist(Player player, int[] arr) {
+        if (arr == null) return;
+        boolean any = false;
+        for (int i = 0; i < SLOT_COUNT; i++) if (arr[i] > 0) { any = true; break; }
+        if (!any) return;
+        STACKS.put(player.getUUID(), arr);
+        applyAllModifiers(player, arr);
+        if (player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            net.minecraft.client.yiz.xian.network.S2CGuinsooStacksPayload.sendTo(sp, arr);
+        }
+    }
+
+    private static void applyAllModifiers(Player player, int[] arr) {
+        var inst = player.getAttribute(YizAttributes.COOLDOWN_REDUCTION);
+        if (inst == null) return;
+        var data = net.minecraft.client.yiz.editor.SkillConfigStorage.get(player.getUUID());
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            ResourceLocation modId = ResourceLocation.parse(MOD_ID_BASE + "_" + i);
+            inst.removeModifier(modId);
+            if (arr[i] > 0 && data != null) {
+                ItemStack eq = data.equipment().getItem(i);
+                if (eq.getItem() instanceof GuinsooRagebladeItem g) {
+                    inst.addTransientModifier(new AttributeModifier(modId,
+                        g.getPerStackCDR() * arr[i], AttributeModifier.Operation.ADD_VALUE));
+                }
+            }
+        }
+    }
 }

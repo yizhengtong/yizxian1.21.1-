@@ -40,13 +40,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * （穿甲+破无敌帧），并播放闪电链 + 体表闪电特效。</p>
  *
  * <p><b>链式传播</b>：溅射致死的目标会继续向其附近最近 2 个敌人溅射，依此类推，直到范围内无活体
- * 目标自然终止（不限制深度、不衰减）。每跳溅射延迟 {@link #DELAY_TICKS}（0.5s）使连锁节奏可见。</p>
+ * 目标自然终止（不限制深度）。每跳衰减 18%（保留 82%，即 {@code ×0.82}）。
+ * 每跳溅射延迟 {@link #DELAY_TICKS}（0.5s）使连锁节奏可见。</p>
  */
 public class LudensEchoItem extends Item implements IEquipmentItem {
 
     private static final int SPILL_TARGETS = 2;
-    /** 衰减常数 K：溅射 = 过量 × victim最大生命/(victim最大生命+K)。K 越大，低血目标衰减越狠。 */
-    private static final double SPILL_DECAY_K = 100.0;
+    /** 每跳保留系数：溅射 = 过量 × RETAIN。0.82 = 每跳衰减 18%。 */
+    private static final double SPILL_RETAIN = 0.82;
     /** 每跳溅射延迟（tick），让连锁传播可见。 */
     private static final long DELAY_TICKS = 10L;
 
@@ -79,7 +80,7 @@ public class LudensEchoItem extends Item implements IEquipmentItem {
     public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.literal("§9被动·激荡"));
         tooltip.add(Component.literal("§7击杀目标时，过量伤害溅射至最近的 §f" + SPILL_TARGETS + " §7个敌人"));
-        tooltip.add(Component.literal("§7溅射伤害 = §f过量伤害§7（目标最大生命越低衰减越强）"));
+        tooltip.add(Component.literal("§7溅射伤害 = §f过量伤害 × 82%§7（每跳衰减 18%）"));
         tooltip.add(Component.literal("§7溅射致死可继续传播"));
     }
 
@@ -174,16 +175,16 @@ public class LudensEchoItem extends Item implements IEquipmentItem {
         for (LivingEntity v : victims) victimIds.add(v.getId());
         NetworkHandler.sendLudenFx(level, center, p.centerId(), victimIds);
 
-        // 溅射伤害 = 过量 + 目标最大生命值×10%；source 非玩家（不被增幅），isSpilling 跳过防御减免。
+        // 溅射伤害 = 过量 × 0.82；source=玩家 → 享受法强/攻强增幅 + 触发吸血
         for (LivingEntity v : victims) {
-            float spillDmg = (float)(p.overkill() * v.getMaxHealth() / (v.getMaxHealth() + SPILL_DECAY_K));  // 低血目标大幅衰减
-            LudenOverkillHandler.recordSpill(v, spillDmg, attacker);  // 记连锁（含死前血量供下跳过量）
-            LudenOverkillHandler.setCurrentSpill(spillDmg);           // isSpilling：modifyHealthForHealBan 跳过减免
+            float spillDmg = (float)(p.overkill() * SPILL_RETAIN);  // 每跳固定保留 82%
+            LudenOverkillHandler.recordSpill(v, spillDmg, attacker);  // 记连锁
             int saved = v.invulnerableTime;
             v.invulnerableTime = 0;
+            String prev = net.minecraft.client.yiz.core.SpellSourceTracker.set("yizxianmod:ludens_echo");
             try {
                 float hpBefore = v.getHealth();
-                net.minecraft.world.damagesource.DamageSource ds = v.damageSources().source(net.minecraft.client.yiz.api.YizDamageTypes.SPILL);
+                net.minecraft.world.damagesource.DamageSource ds = attacker.damageSources().source(net.minecraft.client.yiz.api.YizDamageTypes.SPELL, attacker);
                 v.hurt(ds, spillDmg);
                 // 兜底：末影龙等重写 hurt 吞伤害 → 直接 setHealth 扣血
                 if (v.getHealth() >= hpBefore && spillDmg > 0) {
@@ -193,8 +194,8 @@ public class LudensEchoItem extends Item implements IEquipmentItem {
                 }
                 System.out.println("[LudenSpill] victim=" + v.getType() + " dmg=" + spillDmg + " hp " + hpBefore + "->" + v.getHealth());
             } finally {
+                net.minecraft.client.yiz.core.SpellSourceTracker.restore(prev);
                 v.invulnerableTime = saved;
-                LudenOverkillHandler.clearCurrentSpill();
             }
         }
     }

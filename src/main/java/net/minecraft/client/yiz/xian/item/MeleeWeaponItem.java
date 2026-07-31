@@ -165,9 +165,6 @@ public class MeleeWeaponItem extends SwordItem
         double cd = d.getExtra("critDmg");
         if (cd > 0) tooltip.add(Component.literal(
             "§9暴伤 §f+" + String.format("%.0f%%", cd)));
-        double ls = d.getExtra("lifeSteal");
-        if (ls > 0) tooltip.add(Component.literal(
-            "§9全能吸血 §f" + String.format("%.0f%%", ls)));
         double sr = d.getExtra("splashRadius");
         double sd = d.getExtra("splashDmg");
         double sf = d.getExtra("splashFalloff");

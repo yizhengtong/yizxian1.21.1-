@@ -88,6 +88,9 @@ public final class StackCoreAnvilHandler {
 
     @SubscribeEvent
     public static void onAnvilRepair(AnvilRepairEvent event) {
+        // 仅在服务端执行——单机 IntegratedServer 下此事件会在 Client+Server 各触发一次
+        if (event.getEntity().level().isClientSide()) return;
+
         ItemStack left = event.getLeft();
         ItemStack right = event.getRight();
         if (!isStackCore(right) || left.isEmpty()) return;
