@@ -12,7 +12,10 @@
     "ItemRendererGlowMixin",
     "KillBypassMixin",
     "AutoAttackMixin",
-    "PlayerReachMixin"
+    "PlayerReachMixin",
+    "LivingEntitySwingMixin",
+    "EntityRemoveProtectionMixin",
+    "ServerLevelAddProtectionMixin"
   ],
   "client": [
     "AbstractContainerScreenAccessor"

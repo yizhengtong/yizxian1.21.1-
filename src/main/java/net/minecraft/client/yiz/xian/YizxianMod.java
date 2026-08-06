@@ -19,12 +19,15 @@ import net.minecraft.client.yiz.weapon.WeaponLevelData;
 import net.minecraft.client.yiz.weapon.WeaponProfileRegistry;
 import net.minecraft.client.yiz.xian.api.ComboStateMachine;
 import net.minecraft.client.yiz.xian.api.ILeftHandRender;
+import net.minecraft.client.yiz.xian.item.EntityAttributeEditorItem;
 import net.minecraft.client.yiz.xian.item.MeleeWeaponItem;
 import net.minecraft.client.yiz.xian.item.WeaponItem;
 
 import net.minecraft.client.yiz.xian.effect.LockOnHandler;
 
+import net.minecraft.client.yiz.xian.item.ArmorSet;
 import net.minecraft.client.yiz.xian.item.MuramasaItem;
+import net.minecraft.client.yiz.xian.item.SimpleBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraBladeItem;
 import net.minecraft.client.yiz.xian.item.TerraprismaScrollItem;
 
@@ -83,6 +86,17 @@ public class YizxianMod {
     public static final DeferredRegister<Item> ITEMS =
         DeferredRegister.create(Registries.ITEM, MODID);
 
+    /** 全首者刷怪蛋 */
+    public static final Supplier<Item> QUANSHOUZHE_SPAWN_EGG =
+        ITEMS.register("quanshouzhe_spawn_egg", () -> new net.minecraft.world.item.SpawnEggItem(
+            net.minecraft.client.yiz.xian.entity.registry.YizxianEntityTypes.QUANSHOUZHE.get(),
+            0x2a2a4a, 0x8a5a3a, new net.minecraft.world.item.Item.Properties()));
+
+    /** 实体属性编辑工具（右键实体打开原版容器界面编辑其自定义属性） */
+    public static final Supplier<Item> ENTITY_ATTRIBUTE_EDITOR =
+        ITEMS.register("entity_attribute_editor", () ->
+            new EntityAttributeEditorItem(new Item.Properties().stacksTo(1)));
+
     // JUMP_ATTRIBUTES 组件 + DATA_COMPONENTS 已随 terraria 属性子系统删除（阶段3D）
 
     public static final Supplier<Item> TIAN_LEI_YIN =
@@ -124,6 +138,39 @@ public class YizxianMod {
     // 物品（临时占位）
     public static final Supplier<Item> WUPIN =
         ITEMS.register("wupin", net.minecraft.client.yiz.xian.item.WupinItem::new);
+
+    // 巨阙 / 险位 — 昭明法杖式模型的两把简单剑（有耐久）
+    public static final Supplier<Item> JUQUE =
+        ITEMS.register("juque", () -> new SimpleBladeItem(new Item.Properties().stacksTo(1), 37, 1f, 39655));
+    public static final Supplier<Item> XIANWEI =
+        ITEMS.register("xianwei", () -> new SimpleBladeItem(new Item.Properties().stacksTo(1), 4, 2f, 40));
+
+    // ═══ 护甲套装（11 套，每套 3 件：头/胸/靴，无护腿；至天钻/魔乱/至炎/高阳已删除）═══
+    // 每套：id + 胸甲耐久（头盔×11/16、靴子×13/16 自动按原版槽位系数分配）
+    private static final String[] ARMOR_IDS = {
+        "bingjing", "tianzuan", "huancai", "mingzuan", "zuichuhuanxiang",
+        "huoyan", "yanming", "yutu", "jingtie",
+        "zhongtie", "moling"
+    };
+    private static final int[] ARMOR_CHEST_DUR = {
+        540, 640, 12960, 740, 83987280,
+        600, 590, 700, 490,
+        440, 650
+    };
+
+    /** id → 该套 3 件物品 Supplier（头/胸/靴） */
+    public static final java.util.Map<String, List<Supplier<Item>>> ALL_ARMOR =
+        registerAllArmor();
+
+    private static java.util.Map<String, List<Supplier<Item>>> registerAllArmor() {
+        var map = new java.util.LinkedHashMap<String, List<Supplier<Item>>>();
+        for (int i = 0; i < ARMOR_IDS.length; i++) {
+            String id = ARMOR_IDS[i];
+            var mat = ArmorSet.material(MODID, id);
+            map.put(id, ArmorSet.register(ITEMS, MODID, id, mat, ARMOR_CHEST_DUR[i]));
+        }
+        return map;
+    }
 
     // 泰拉棱镜卷轴 — 5 等级（召唤武器）
     public static final List<Supplier<Item>> TERRAPRISMA_SCROLLS =
@@ -171,12 +218,22 @@ public class YizxianMod {
         () -> TERRA_BLADES.get(0).get(), o -> {
             for (var s : TERRA_BLADES) o.accept(s.get());
             for (var s : MURAMASAS) o.accept(s.get());
+            o.accept(JUQUE.get());
+            o.accept(XIANWEI.get());
+        });
+
+    /** 护甲（11 套，每套 3 件：头/胸/靴，无护腿） */
+    public static final Supplier<CreativeModeTab> ARMOR_TAB = tab("armor", "itemGroup.yizxianmod.armor",
+        () -> ALL_ARMOR.values().iterator().next().get(0).get(), o -> {
+            for (var list : ALL_ARMOR.values()) for (var s : list) o.accept(s.get());
         });
 
     /** 召唤物 */
     public static final Supplier<CreativeModeTab> SUMMON_TAB = tab("summon", "itemGroup.yizxianmod.summon",
         () -> TERRAPRISMA_SCROLLS.get(0).get(), o -> {
             for (var s : TERRAPRISMA_SCROLLS) o.accept(s.get());
+            o.accept(QUANSHOUZHE_SPAWN_EGG.get());
+            o.accept(ENTITY_ATTRIBUTE_EDITOR.get());
         });
 
     /** 装备 */
@@ -230,6 +287,13 @@ public class YizxianMod {
         // ---- 物品注册 ----
         ITEMS.register(modEventBus);
 
+        // ---- 生物实体注册（全首者 Boss）----
+        net.minecraft.client.yiz.xian.entity.registry.YizxianEntityTypes.ENTITY_TYPES.register(modEventBus);
+        modEventBus.addListener(net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent.class, event -> {
+            event.put(net.minecraft.client.yiz.xian.entity.registry.YizxianEntityTypes.QUANSHOUZHE.get(),
+                net.minecraft.client.yiz.xian.entity.QuanshouzheEntity.createAttributes().build());
+        });
+
         // ---- 创造模式标签页 ----
         CREATIVE_MODE_TABS.register(modEventBus);
 
@@ -244,6 +308,18 @@ public class YizxianMod {
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.TYPE,
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload.STREAM_CODEC,
                 net.minecraft.client.yiz.xian.network.C2SAttributeApplyPayload::handle
+            );
+            // 客户端 → 服务端：实体属性编辑工具「应用」请求
+            registrar.playToServer(
+                net.minecraft.client.yiz.xian.network.C2SEntityAttributeEditPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.C2SEntityAttributeEditPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.C2SEntityAttributeEditPayload::handle
+            );
+            // 客户端 → 服务端：紫昭明光施法请求（右键连发）
+            registrar.playToServer(
+                net.minecraft.client.yiz.xian.network.C2SZhaoMingCastPayload.TYPE,
+                net.minecraft.client.yiz.xian.network.C2SZhaoMingCastPayload.STREAM_CODEC,
+                net.minecraft.client.yiz.xian.network.C2SZhaoMingCastPayload::handle
             );
             // 客户端 → 服务端：光明指南针工作槽放入/移除
             registrar.playToServer(
@@ -313,7 +389,7 @@ public class YizxianMod {
         // Guinsoo / Explorer 叠层纯内存 + S2C 事件同步，登出/登入经 EquipmentStackPersist（存档目录 JSON）持久化。
 
         // 饰品槽系统(AccessoryContainer) + terraria 减伤回调已随 terraria 子系统删除（阶段3D）
-        // 装备减伤现由 yizmodqzk DAMAGE_REDUCTION 属性 + LivingEntityMixin.modifyHealthForHealBan 接管
+        // 装备减伤现由 yizmodqzk DAMAGE_REDUCTION 属性 + LivingEntityMixin.modifyHealthForVitalitySeverance 接管
 
         // ---- JSON 热重载（暂时禁用，排查进世界卡住问题） ----
         // NeoForge.EVENT_BUS.addListener(this::onAddReloadListeners);
@@ -333,6 +409,8 @@ public class YizxianMod {
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onLivingDamage);
         NeoForge.EVENT_BUS.addListener(this::onPlayerClone);
+        // ---- 世界难度变化 → 统一重算本模组实体战斗属性（事件驱动，无每 tick 检测）----
+        NeoForge.EVENT_BUS.addListener(this::onDifficultyChanged);
 
         // 心之翅/突进服务端(BoostHandler)已删除（阶段3C）
         // 附加跳服务端落地充能已由 yizmodqzk MultiJumpRechargeHandler 接管
@@ -527,6 +605,10 @@ public class YizxianMod {
             net.minecraft.client.yiz.xian.core.EquipmentStackPersist.onPlayerLogout(serverPlayer);
             // 连招纯内存状态清理（防 Map 内存泄漏）
             ComboStateMachine.clear(serverPlayer.getUUID());
+            // 技能装配内存清理（防跨存档泄漏）
+            net.minecraft.client.yiz.editor.SkillConfigStorage.clear(serverPlayer.getUUID());
+            // 紫昭明光 FX 清理（防跨存档残留）
+            net.minecraft.client.yiz.xian.fx.ZhaoMingLightManager.getInstance().removeFor(serverPlayer.getUUID());
         }
     }
 
@@ -535,6 +617,23 @@ public class YizxianMod {
         if (event.isWasDeath() && event.getEntity() instanceof Player player) {
             net.minecraft.client.yiz.xian.item.equipment.GuinsooRagebladeItem.onPlayerDeath(player);
             net.minecraft.client.yiz.xian.item.equipment.ExplorerVambraceItem.onPlayerDeath(player);
+        }
+    }
+
+    /**
+     * 世界难度变化：遍历所有维度的本模组实体，统一按新难度重算战斗属性。
+     * 事件驱动替代每 tick 检测；仅在玩家实际切换难度时触发一次。
+     */
+    private void onDifficultyChanged(net.neoforged.neoforge.event.DifficultyChangeEvent event) {
+        net.minecraft.server.MinecraftServer server =
+            net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+                if (e instanceof net.minecraft.client.yiz.xian.entity.base.YizxianMob mob) {
+                    mob.refreshDifficultyAttributes();
+                }
+            }
         }
     }
 
