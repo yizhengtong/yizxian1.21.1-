@@ -23,6 +23,14 @@ public final class YizxianMenus {
             net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS
         ));
 
+    /** 实体属性编辑容器：目标实体 id 经 IContainerFactory 额外数据传给客户端。 */
+    public static final Supplier<MenuType<EntityAttributeEditMenu>> ENTITY_ATTRIBUTE_EDIT_MENU =
+        MENUS.register("entity_attribute_edit", () -> new MenuType<>(
+            (net.neoforged.neoforge.network.IContainerFactory<EntityAttributeEditMenu>)
+                (containerId, playerInventory, data) -> new EntityAttributeEditMenu(containerId, playerInventory, data.readInt()),
+            net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS
+        ));
+
     public static void register(IEventBus modEventBus) {
         MENUS.register(modEventBus);
     }

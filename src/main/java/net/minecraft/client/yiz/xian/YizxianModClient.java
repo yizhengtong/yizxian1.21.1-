@@ -14,6 +14,7 @@ import net.minecraft.client.yiz.xian.item.WupinItem;
 import net.minecraft.client.yiz.xian.render.AnimationPreviewRenderer;
 import net.minecraft.client.yiz.xian.render.EnergyWaveRenderer;
 import net.minecraft.client.yiz.xian.render.ZhaoMingLightClientManager;
+import net.minecraft.client.yiz.xian.render.ZhaoMingCastHandler;
 import net.minecraft.client.yiz.xian.render.ZhaoMingLightShaders;
 import net.minecraft.client.yiz.xian.render.ZhaoMingLightWorldRenderer;
 import net.minecraft.client.yiz.xian.render.TerraprismaRenderHandler;
@@ -68,6 +69,8 @@ public class YizxianModClient {
 
         // ═══ HUD 系统：DEL+ALT 打开编辑器，RenderGuiEvent 分发 ═══
         HudPositionConfig.load();
+        // 昭明法杖发射点偏移配置（/yizxian zhaoming 指令调整）
+        net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.load();
         // BoostHud/ExtraJumpHud 已随心之翅/多段跳系统删除（阶段3B/3C）
         NeoForge.EVENT_BUS.addListener(HudManager::onRenderGui);
         NeoForge.EVENT_BUS.addListener(YizxianModClient::onHudKeyTick);
@@ -95,8 +98,23 @@ public class YizxianModClient {
 
         // ═══ 紫昭明光本地模拟 + 服务端校准（ClientTickEvent 驱动）═══
         NeoForge.EVENT_BUS.addListener(ZhaoMingLightClientManager::onClientTick);
+        // ═══ 紫昭明光右键连发（检测右键按住，越按越快施法）═══
+        NeoForge.EVENT_BUS.addListener(ZhaoMingCastHandler::onClientTick);
+        // 客户端进世界时清空本地特效（防跨存档残留）
+        NeoForge.EVENT_BUS.addListener(
+                net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class,
+                e -> ZhaoMingLightClientManager.getInstance().clear());
         // ═══ 紫昭明光世界渲染（读本地模拟 FX，RenderLevelStageEvent 绘制）═══
         NeoForge.EVENT_BUS.addListener(ZhaoMingLightWorldRenderer::onRenderLevelStage);
+
+        // ═══ 全首者 Boss 渲染注册 ═══
+        modEventBus.addListener(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers.class, e ->
+            e.registerEntityRenderer(
+                net.minecraft.client.yiz.xian.entity.registry.YizxianEntityTypes.QUANSHOUZHE.get(),
+                net.minecraft.client.yiz.xian.client.renderer.QuanshouzheRenderer::new));
+        modEventBus.addListener(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterLayerDefinitions.class, e ->
+            e.registerLayerDefinition(net.minecraft.client.yiz.xian.client.renderer.QuanshouzheRenderer.LAYER,
+                net.minecraft.client.yiz.xian.client.model.QuanshouzheModel::createBodyLayer));
 
         // ═══ 模型烘焙修饰 — 分级发光色 ═══
         modEventBus.addListener(ModelEvent.ModifyBakingResult.class, event -> {
@@ -134,6 +152,10 @@ public class YizxianModClient {
             event.register(
                 net.minecraft.client.yiz.xian.menu.YizxianMenus.LIGHT_COMPASS_MENU.get(),
                 net.minecraft.client.yiz.xian.client.screen.LightCompassScreen::new
+            );
+            event.register(
+                net.minecraft.client.yiz.xian.menu.YizxianMenus.ENTITY_ATTRIBUTE_EDIT_MENU.get(),
+                net.minecraft.client.yiz.xian.client.screen.EntityAttributeEditScreen::new
             );
         });
 

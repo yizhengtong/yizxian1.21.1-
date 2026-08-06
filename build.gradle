@@ -40,6 +40,28 @@ repositories {
     // yiz-qzk library mod — built locally in sibling project
     // Provides: API, effects, damage, health, UI framework
     flatDir { dirs '../yiz1.21.1/build/libs' }
+
+    // NeoForge 离线依赖回退仓库 — maven.neoforged.net 网络被阻断时，
+    // 手动放置的 7 个 neoform 工具 jar + 最小 pom 在 D:\ZM\yizgzq\local-maven-repo。
+    // 网络恢复后可移除此行（保留也无害，仅本地候选源）。
+    maven {
+        url = uri('file:///D:/ZM/yizgzq/local-maven-repo')
+        // 允许读 gradle module metadata（.module），ModDevGradle 依赖 neoform-runtime 的
+        // externalTools capability variant，它只存在于 .module 中。
+        metadataSources { mavenPom(); gradleMetadata() }
+    }
+}
+
+// ModDevGradle 会把 maven.neoforged.net sortFirst 到仓库最前，网络被阻断时连接失败即整体报错。
+// 这里把本地回退仓库移到 index 0，让离线依赖从本地解析。
+afterEvaluate {
+    def handler = repositories
+    def local = handler.findAll { it instanceof org.gradle.api.artifacts.repositories.MavenArtifactRepository
+        && it.url.toString().contains('local-maven-repo') }
+    local.each { r ->
+        handler.remove(r)
+        handler.add(0, r)
+    }
 }
 
 base {

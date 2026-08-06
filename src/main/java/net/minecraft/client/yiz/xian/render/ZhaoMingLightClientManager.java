@@ -30,9 +30,10 @@ import java.util.UUID;
 public final class ZhaoMingLightClientManager {
 
     private static final ZhaoMingLightClientManager INSTANCE = new ZhaoMingLightClientManager();
-    private static final double SPEED = 0.4;       // 8 格/秒
+    private static final double SPEED = 0.8;       // 16 格/秒（4→8 翻倍）
     private static final int FLYING_TICKS = 40;    // 2 秒
     private static final int HOVER_TICKS = 300;    // 15 秒
+    private static final int PREVIEW_TICKS = 100;  // 预览球 5 秒
     private static final double SEEK_RANGE = 24.0;
     private static final double APPROACH = 0.3;    // 每 tick 向服务端位置逼近比例
 
@@ -50,23 +51,45 @@ public final class ZhaoMingLightClientManager {
         public int flyingTicks;
         public int hoverTicks;
         public boolean removed;
+        /** 预览球（指令 spawn 生成，固定位置不移动） */
+        public final boolean preview;
+        /** 准心方向 + 准心线倾斜目标（客户端预测用） */
+        public Vec3 lookDir;
+        public Vec3 alignTarget;
+        private int alignTicks;
 
-        LocalFX(int id, UUID owner, Vec3 pos, Vec3 vel, int state) {
+        LocalFX(int id, UUID owner, Vec3 pos, Vec3 vel, int state, boolean preview,
+                Vec3 lookDir, Vec3 alignTarget) {
             this.id = id;
             this.owner = owner;
             this.position = pos;
             this.prevPosition = pos;
             this.velocity = vel;
             this.state = state;
+            this.preview = preview;
+            this.lookDir = lookDir;
+            this.alignTarget = alignTarget;
         }
 
         void tick(ClientLevel level) {
             prevPosition = position;
+            if (preview) {
+                if (++hoverTicks >= PREVIEW_TICKS) removed = true;
+                return;   // 预览球固定位置，不移动
+            }
             Player owner = level.getPlayerByUUID(this.owner);
             if (owner == null) { removed = true; return; }
             // 本地状态机移动（平滑）
             switch (state) {
-                case 0 -> {   // FLYING：直线
+                case 0 -> {   // FLYING：先倾斜到准心线，再沿准心直线
+                    if (lookDir != null && alignTicks < 6) {
+                        Vec3 to = alignTarget.subtract(position);
+                        double d = to.length();
+                        velocity = d < 0.3 ? lookDir.scale(SPEED) : to.normalize().scale(SPEED);
+                        alignTicks++;
+                    } else if (lookDir != null) {
+                        velocity = lookDir.scale(SPEED);
+                    }
                     position = position.add(velocity);
                     if (++flyingTicks >= FLYING_TICKS) state = 1;
                 }
@@ -88,13 +111,21 @@ public final class ZhaoMingLightClientManager {
 
     public static ZhaoMingLightClientManager getInstance() { return INSTANCE; }
 
-    /** 施法：客户端本地预测（立即显示，S2C 后用服务端 id 接管）。 */
-    public void add(Player owner, Vec3 dir) {
-        if (!owner.level().isClientSide) return;
-        // 从法杖物品位置发射（玩家身前手部高度，非视线/眼睛）
-        Vec3 pos = new Vec3(owner.getX() + dir.x * 0.6, owner.getY() + 1.0, owner.getZ() + dir.z * 0.6);
-        Vec3 vel = dir.normalize().scale(SPEED);
-        fx.put(nextPredId--, new LocalFX(0, owner.getUUID(), pos, vel, 0));
+    /** 施法：客户端本地预测（立即显示，S2C 后用服务端 id 接管）。返回发射点供闪烁用。 */
+    public Vec3 add(Player owner, Vec3 dir) {
+        if (!owner.level().isClientSide) return null;
+        // 发射点由配置偏移决定；初始轨迹朝准心，先倾斜到准心线
+        Vec3 look = dir.normalize();
+        Vec3 pos = net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.launchPos(owner, dir);
+        Vec3 alignTarget = owner.getEyePosition(1.0f).add(look.scale(5.0));
+        Vec3 vel = look.scale(SPEED);
+        fx.put(nextPredId--, new LocalFX(0, owner.getUUID(), pos, vel, 0, false, look, alignTarget));
+        return pos;
+    }
+
+    /** 在指定坐标生成预览球（/yizxian zhaoming spawn，调发射点时看位置）。 */
+    public void addPreview(Vec3 pos) {
+        fx.put(nextPredId--, new LocalFX(0, null, pos, Vec3.ZERO, 1, true, null, null));
     }
 
     /** S2C 校准：服务端权威状态/位置修正本地，贴合实际轨迹。 */
@@ -105,7 +136,7 @@ public final class ZhaoMingLightClientManager {
             if (f == null) {
                 // 服务端有、本地无 → 创建在服务端位置
                 fx.put(e.id(), new LocalFX(e.id(), e.owner(),
-                        new Vec3(e.x(), e.y(), e.z()), Vec3.ZERO, mapState(e.state())));
+                        new Vec3(e.x(), e.y(), e.z()), Vec3.ZERO, mapState(e.state()), false, null, null));
             } else {
                 f.state = mapState(e.state());
                 f.target = new Vec3(e.x(), e.y(), e.z());
@@ -120,6 +151,9 @@ public final class ZhaoMingLightClientManager {
     private static int mapState(int serverState) {
         return serverState == 4 ? 2 : (serverState == 0 ? 0 : 1);
     }
+
+    /** 清空全部本地 FX（客户端进世界/切存档时调用，防止跨存档残留特效）。 */
+    public void clear() { fx.clear(); }
 
     /** 客户端每 tick 驱动本地状态机。 */
     public void tick(ClientLevel level) {

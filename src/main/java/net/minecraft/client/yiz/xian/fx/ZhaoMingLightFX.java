@@ -32,8 +32,8 @@ import java.util.UUID;
  */
 public class ZhaoMingLightFX {
 
-    /** 飞行速度：8 格/秒 = 0.4 格/tick */
-    public static final double SPEED = 0.4;
+    /** 飞行速度：16 格/秒 = 0.8 格/tick（4→8 翻倍） */
+    public static final double SPEED = 0.8;
     /** 直线飞行时长：2 秒 */
     public static final int FLYING_TICKS = 40;
     /** 盘旋时长：15 秒 */
@@ -61,17 +61,25 @@ public class ZhaoMingLightFX {
     public Vec3 velocity;
     public State state = State.FLYING;
     public Vec3 blockHitPos;
+    /** 准心方向（发射时视线方向，初始轨迹朝准心） */
+    public Vec3 lookDir;
+    /** 准心线上的倾斜目标点（发射时 眼睛 + look*5） */
+    public Vec3 alignTarget;
+    private int alignTicks;
     public int flyingTicks;
     public int hoverTicks;
     public boolean hasRefunded;
     public boolean removed;
 
-    public ZhaoMingLightFX(int id, ServerLevel level, UUID ownerUuid, Vec3 pos, Vec3 vel) {
+    public ZhaoMingLightFX(int id, ServerLevel level, UUID ownerUuid, Vec3 pos, Vec3 vel,
+                           Vec3 lookDir, Vec3 alignTarget) {
         this.id = id;
         this.level = level;
         this.ownerUuid = ownerUuid;
         this.position = pos;
         this.velocity = vel;
+        this.lookDir = lookDir;
+        this.alignTarget = alignTarget;
     }
 
     public void tick() {
@@ -92,6 +100,15 @@ public class ZhaoMingLightFX {
     // ── FLYING：直线无重力，4 格/秒，2 秒 ────────────────────────────
 
     private void tickFlying() {
+        // 倾斜到准心：前 6 tick 朝准心线上的目标点收敛（快速转向），之后沿准心直线
+        if (alignTicks < 6 && lookDir != null && alignTarget != null) {
+            Vec3 to = alignTarget.subtract(position);
+            double d = to.length();
+            velocity = d < 0.3 ? lookDir.scale(SPEED) : to.normalize().scale(SPEED);
+            alignTicks++;
+        } else if (lookDir != null) {
+            velocity = lookDir.scale(SPEED);
+        }
         LivingEntity hit = findFirstHit();
         if (hit != null) {
             dealDamage(hit, DMG_FLY);
@@ -242,13 +259,10 @@ public class ZhaoMingLightFX {
         int saved = target.invulnerableTime;
         target.invulnerableTime = 0;
         try {
-            float hpBefore = target.getHealth();
+            // spell 法伤标准模板：玩家为来源，只 hurt 一次（无 setHealth 兜底）。
+            // SPELL 类型无物理 tags → 跳过护甲/减伤/格挡/盾牌；
+            // LivingEntityMixin 处理抗性(90%封顶)+保护附魔(80%)+法术防御。
             target.hurt(ds, dmg);
-            if (target.getHealth() >= hpBefore && dmg > 0.01f) {
-                float newHp = Math.max(0f, hpBefore - dmg);
-                target.setHealth(newHp);
-                if (newHp <= 0f && !target.isDeadOrDying()) target.die(ds);
-            }
         } finally {
             target.invulnerableTime = saved;
         }

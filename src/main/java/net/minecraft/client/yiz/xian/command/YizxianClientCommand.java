@@ -1,6 +1,7 @@
 package net.minecraft.client.yiz.xian.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -67,11 +68,31 @@ public final class YizxianClientCommand {
                         .executes(YizxianClientCommand::startAnimPreview))
                     .then(Commands.literal("stop")
                         .executes(YizxianClientCommand::stopAnimPreview)))
+                .then(Commands.literal("zhaoming")
+                    .then(Commands.literal("get")
+                        .executes(YizxianClientCommand::zhaoMingGet))
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("forward", FloatArgumentType.floatArg())
+                            .then(Commands.argument("height", FloatArgumentType.floatArg())
+                                .then(Commands.argument("side", FloatArgumentType.floatArg())
+                                    .executes(YizxianClientCommand::zhaoMingSet)))))
+                    .then(Commands.literal("spawn")
+                        .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                            .then(Commands.argument("y", DoubleArgumentType.doubleArg())
+                                .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                    .executes(YizxianClientCommand::zhaoMingSpawn))))))
                 .then(Commands.literal("pivot")
                     .then(Commands.argument("x", FloatArgumentType.floatArg(-2f, 2f))
                         .then(Commands.argument("y", FloatArgumentType.floatArg(-2f, 2f))
                             .then(Commands.argument("z", FloatArgumentType.floatArg(-2f, 2f))
                                 .executes(YizxianClientCommand::setPivot)))))
+                .then(Commands.literal("wingtest")
+                    .then(Commands.literal("clear")
+                        .executes(YizxianClientCommand::wingTestClear))
+                    .then(Commands.argument("part", StringArgumentType.word())
+                        .then(Commands.argument("axis", StringArgumentType.word())
+                            .then(Commands.argument("deg", FloatArgumentType.floatArg(-180f, 180f))
+                                .executes(YizxianClientCommand::setWingTest)))))
         );
     }
 
@@ -235,6 +256,61 @@ public final class YizxianClientCommand {
     }
 
     /** /yizxian pivot <x> <y> <z> — 设置旋转枢轴（方块单位，相对模型中心） */
+    /** 查看昭明法杖发射点偏移。 */
+    private static int zhaoMingGet(CommandContext<CommandSourceStack> ctx) {
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§d昭明法杖发射点偏移: 前=" + net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.forward()
+                + " 高=" + net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.height()
+                + " 侧=" + net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.side()
+                + "§7  (用法: /yizxian zhaoming set <前> <高> <侧> / spawn <x> <y> <z>)"), false);
+        }
+        return 1;
+    }
+
+    /** 设置昭明法杖发射点偏移（绝对值，非增量）。 */
+    private static int zhaoMingSet(CommandContext<CommandSourceStack> ctx) {
+        float f = FloatArgumentType.getFloat(ctx, "forward");
+        float h = FloatArgumentType.getFloat(ctx, "height");
+        float s = FloatArgumentType.getFloat(ctx, "side");
+        net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.set(f, h, s);
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                "§a发射点偏移已设置 → 前=" + f + " 高=" + h + " 侧=" + s), false);
+        }
+        return 1;
+    }
+
+    /** 在指定坐标生成预览球（调发射点时看位置）。 */
+    private static int zhaoMingSpawn(CommandContext<CommandSourceStack> ctx) {
+        double x = DoubleArgumentType.getDouble(ctx, "x");
+        double y = DoubleArgumentType.getDouble(ctx, "y");
+        double z = DoubleArgumentType.getDouble(ctx, "z");
+        net.minecraft.client.yiz.xian.render.ZhaoMingLightClientManager.getInstance()
+                .addPreview(new net.minecraft.world.phys.Vec3(x, y, z));
+        return 1;
+    }
+
+    /** /yizxian wingtest <main|mem> <x|y|z> <deg> — 锁定全首者翅膀某骨轴角度（现场找正确扇动轴）。 */
+    private static int setWingTest(CommandContext<CommandSourceStack> ctx) {
+        String part = StringArgumentType.getString(ctx, "part");
+        String axis = StringArgumentType.getString(ctx, "axis");
+        float deg = FloatArgumentType.getFloat(ctx, "deg");
+        net.minecraft.client.yiz.xian.client.model.QuanshouzheWingDebug.set(part, axis, deg);
+        ctx.getSource().sendSuccess(
+            () -> Component.literal("§e翅膀调试 §7" + part + "." + axis + " = " + deg + "° §7(/wingtest clear 恢复)"), false);
+        return 1;
+    }
+
+    /** /yizxian wingtest clear — 清除调试，恢复翅膀动画。 */
+    private static int wingTestClear(CommandContext<CommandSourceStack> ctx) {
+        net.minecraft.client.yiz.xian.client.model.QuanshouzheWingDebug.clear();
+        ctx.getSource().sendSuccess(() -> Component.literal("§a翅膀调试已清除，恢复动画"), false);
+        return 1;
+    }
+
     private static int setPivot(CommandContext<CommandSourceStack> ctx) {
         float x = FloatArgumentType.getFloat(ctx, "x");
         float y = FloatArgumentType.getFloat(ctx, "y");

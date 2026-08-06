@@ -1,0 +1,48 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "yizxianmod:item/xianwei"
+  },
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [0, -84, -95],
+      "translation": [0, 5, 2.5],
+      "scale": [1.92, 0.64, 0.64]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [0, -84, 85],
+      "translation": [0, 4.5, 2],
+      "scale": [1.92, 0.64, 0.64]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, -99, -80],
+      "translation": [5.25, 1, -6.5],
+      "scale": [1.92, 0.64, 0.64]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, -99, 100],
+      "translation": [5.25, 1, -6.5],
+      "scale": [1.92, 0.64, 0.64]
+    },
+    "ground": {
+      "rotation": [0, 0, -60],
+      "translation": [0, 8.75, 0],
+      "scale": [2.25, 0.75, 0.75]
+    },
+    "gui": {
+      "rotation": [0, 0, -52],
+      "translation": [1, -2.5, 0],
+      "scale": [1.2, 0.4, 0.4]
+    },
+    "head": {
+      "rotation": [0, 0, 46],
+      "translation": [0, -14.75, 7],
+      "scale": [3, 1, 1]
+    },
+    "fixed": {
+      "rotation": [0, 0, -140],
+      "translation": [-2.5, -2, 0],
+      "scale": [1.92, 0.64, 0.64]
+    }
+  }
+}

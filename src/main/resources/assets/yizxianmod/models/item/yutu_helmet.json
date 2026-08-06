@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "yizxianmod:item/yutu_helmet"
+  }
+}

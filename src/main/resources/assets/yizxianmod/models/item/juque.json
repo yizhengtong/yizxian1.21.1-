@@ -1,0 +1,47 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "yizxianmod:item/juque"
+  },
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [0, -84, -95],
+      "translation": [0, 7.25, 2.5],
+      "scale": [2.55, 0.85, 0.85]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [0, -84, 95],
+      "translation": [0, 7.25, 2.5],
+      "scale": [2.55, 0.85, 0.85]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, -99, -80],
+      "translation": [4.5, 5.25, -6.5],
+      "scale": [2.55, 0.85, 0.85]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, -99, 100],
+      "translation": [4.5, 5.25, -6.5],
+      "scale": [2.55, 0.85, 0.85]
+    },
+    "ground": {
+      "rotation": [0, 0, -60],
+      "translation": [0, 8.75, 0],
+      "scale": [3, 1, 1]
+    },
+    "gui": {
+      "rotation": [0, 0, -52],
+      "translation": [1, -2.5, 0],
+      "scale": [1.2, 0.4, 0.4]
+    },
+    "head": {
+      "rotation": [0, 0, 46],
+      "translation": [0, -14.75, 7],
+      "scale": [3, 1, 1]
+    },
+    "fixed": {
+      "rotation": [0, 0, -140],
+      "scale": [4.2, 1.4, 0.99]
+    }
+  }
+}

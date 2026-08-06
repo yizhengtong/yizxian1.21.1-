@@ -41,3 +41,7 @@ repo/
 
 ### Mod files ###
 mods
+
+### yiz ###
+run-client.log
+.context/

@@ -40,10 +40,12 @@ public final class ZhaoMingLightManager {
     public void add(Player owner, Vec3 dir) {
         if (owner.level().isClientSide) return;
         if (!(owner.level() instanceof ServerLevel sl)) return;
-        // 从法杖物品位置发射（玩家身前手部高度，非视线/眼睛）
-        Vec3 pos = new Vec3(owner.getX() + dir.x * 0.6, owner.getY() + 1.0, owner.getZ() + dir.z * 0.6);
-        Vec3 vel = dir.normalize().scale(ZhaoMingLightFX.SPEED);
-        fx.add(new ZhaoMingLightFX(idCounter.getAndIncrement(), sl, owner.getUUID(), pos, vel));
+        // 发射点由配置偏移决定（/yizxian zhaoming 指令可调整）；初始轨迹朝准心，先倾斜到准心线
+        Vec3 look = dir.normalize();
+        Vec3 pos = net.minecraft.client.yiz.xian.core.ZhaoMingLaunchConfig.launchPos(owner, dir);
+        Vec3 alignTarget = owner.getEyePosition(1.0f).add(look.scale(5.0));
+        Vec3 vel = look.scale(ZhaoMingLightFX.SPEED);
+        fx.add(new ZhaoMingLightFX(idCounter.getAndIncrement(), sl, owner.getUUID(), pos, vel, look, alignTarget));
     }
 
     /** 每服务器 tick 驱动：更新当前 level 的 FX 状态机 + 该 level 独立周期同步。 */
@@ -69,6 +71,11 @@ public final class ZhaoMingLightManager {
             lastSyncByLevel.put(level.dimension(), now);
             sync(level);
         }
+    }
+
+    /** 移除指定施法者的全部 FX（登出/切存档时调用，防止跨存档残留）。 */
+    public void removeFor(UUID ownerUuid) {
+        fx.removeIf(f -> f.ownerUuid.equals(ownerUuid));
     }
 
     /** 返回指定施法者名下存活的 FX（按 id 排序，用于盘旋角度分配）。 */
