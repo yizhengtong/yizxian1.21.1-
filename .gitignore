@@ -45,3 +45,4 @@ mods
 ### yiz ###
 run-client.log
 .context/
+__pycache__/
