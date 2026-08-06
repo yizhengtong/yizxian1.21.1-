@@ -83,13 +83,14 @@ public class QuanshouzheEntity extends YizxianMob {
     private UUID lastPlayerHurtBy;
     private long lastPlayerHurtTime = -1000;
 
-    /** 传导受击 CD 保底（属性 CONDUCTION_INTERVAL 未挂/为 0 时兜底）：20 tick = 1 秒。 */
+    /** 传导受击 CD 保底（无敌帧属性未挂/为 0 时兜底）：20 tick = 1 秒。 */
     private static final int CONDUCTION_HIT_CD_FALLBACK = 20;
     private long lastConductionHitTick = Long.MIN_VALUE;
 
-    /** 读传导受击 CD（属性 CONDUCTION_INTERVAL 决定，0=禁用；未挂载/为 0 → 保底 20tick）。 */
+    /** 读传导受击 CD = 无敌帧属性 INVINCIBILITY_MULT 的时间（用户定：传导 CD 就是无敌帧定义的时间）。
+     *  跟随无敌帧属性实时变动（编辑工具改 INVINCIBILITY_MULT → 传导 CD 同步变）；未挂载/为 0 → 保底 20tick。 */
     private long conductionHitCdTicks() {
-        var inst = this.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.CONDUCTION_INTERVAL);
+        var inst = this.getAttribute(net.minecraft.client.yiz.attribute.YizAttributes.INVINCIBILITY_MULT);
         double v = inst != null ? inst.getValue() : 0;
         return v > 0 ? (long) v : CONDUCTION_HIT_CD_FALLBACK;
     }
@@ -162,7 +163,6 @@ public class QuanshouzheEntity extends YizxianMob {
             .add(YizAttributes.FIRST_DREAM, 0.0)
             // ── 传导限伤（2026-08-07 新增，基值 0，数值由 applyEntityAttributes 经 EntityAttributeGate 分配）──
             .add(YizAttributes.CONDUCTION_CAP, 0.0)
-            .add(YizAttributes.CONDUCTION_INTERVAL, 0.0)
             // ── 血量隐匿（>0 时真实血量藏 Lambda 闭包）──
             .add(YizAttributes.SECURE_PULSE, 0.0);
     }
@@ -185,9 +185,8 @@ public class QuanshouzheEntity extends YizxianMob {
         EntityAttributeGate.set(this, YizAttributes.ARMOR, "armor", scaleDifficulty(15.0));
         EntityAttributeGate.set(this, YizAttributes.SPELL_DEFENSE, "spell_defense", scaleDifficulty(15.0));
         // ── 传导限伤：先衰减再与上限比较。上限 = 最大生命值 × CONDUCTION_CAP%（当前 25%）。
-        //    受击 CD = CONDUCTION_INTERVAL（当前 20tick = 1 秒，属性可调）──
+        //    受击 CD = 无敌帧属性 INVINCIBILITY_MULT（上方已挂 16，编辑工具改它传导 CD 同步变）──
         EntityAttributeGate.set(this, YizAttributes.CONDUCTION_CAP, "conduction_cap", scaleDifficulty(25.0));
-        EntityAttributeGate.set(this, YizAttributes.CONDUCTION_INTERVAL, "conduction_interval", scaleDifficulty(20.0));
         // 血量外部存储（flashfur 式）：真实血量在 SecureHealthClosure 哈希表，首次以当前血量注册
         EntityAttributeGate.set(this, YizAttributes.SECURE_PULSE, "secure_pulse", 1.0);
         net.minecraft.client.yiz.tool.health.SecureHealthClosure.register(this, (float) this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH));
@@ -558,7 +557,7 @@ public class QuanshouzheEntity extends YizxianMob {
         if (level().isClientSide()) return false;
         if (amount <= 0) return false;
 
-        // ── 传导受击 CD（flashfur 式 iFrames，属性 CONDUCTION_INTERVAL 决定时长）──
+        // ── 传导受击 CD（flashfur 式 iFrames，时长 = 无敌帧属性 INVINCIBILITY_MULT）──
         // 寰宇支配之剑每次左键 = hurt(真伤) + setHealth(0) 重定向 = 两次扣血，连点会快速耗血。
         // CD 让每次实际扣血后 N tick 内不再接受任何伤害（含 setHealth 重定向的 hurt）——连点只吃第一下。
         // 注意：lastConductionHitTick 初始 Long.MIN_VALUE，若直接相减会 long 溢出为负数恒 <CD → 全部误挡。

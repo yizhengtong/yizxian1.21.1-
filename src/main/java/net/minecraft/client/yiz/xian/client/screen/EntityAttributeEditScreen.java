@@ -47,18 +47,17 @@ public class EntityAttributeEditScreen extends AbstractContainerScreen<EntityAtt
         new Entry("vitality_severance_rate",     "绝妄生机率",   YizAttributes.VITALITY_SEVERANCE_RATE,     5),
         new Entry("vitality_severance_time",     "绝妄生机时间", YizAttributes.VITALITY_SEVERANCE_TIME,     1),
         new Entry("first_dream",        "最初梦幻",   YizAttributes.FIRST_DREAM,        5),
-        // ── 传导限伤（2026-08-07 新增，目标侧单发限伤 + 受击 CD，均属性可调）──
-        new Entry("conduction_cap",      "传导单发上限", YizAttributes.CONDUCTION_CAP,     5),
-        new Entry("conduction_interval", "传导受击CD",   YizAttributes.CONDUCTION_INTERVAL, 5)
+        // ── 传导限伤（2026-08-07 新增，目标侧单发限伤；受击 CD = 无敌帧属性，编辑工具已有「无敌帧」条目）──
+        new Entry("conduction_cap",      "传导单发上限", YizAttributes.CONDUCTION_CAP,     5)
     );
 
     // ── 布局（GUI 内相对坐标）──
-    // 17 个属性两列显示（左列 9 + 右列 8），按钮放顶部避免被属性行点击拦截
+    // 16 个属性两列显示（左列 8 + 右列 8），按钮放顶部避免被属性行点击拦截
     private static final int LIST_X = 12;
     private static final int LIST_X2 = 92;      // 右列起点
     private static final int LIST_Y0 = 42;
     private static final int LIST_ROW_H = 9;
-    private static final int LIST_COLS = 9;     // 每列 9 个（17 个属性 = 9+8 两列）
+    private static final int LIST_COLS = 8;     // 每列 8 个（16 个属性 = 8+8 两列）
     private static final int APPLY_X = 64;
     private static final int APPLY_Y = 18;
 
