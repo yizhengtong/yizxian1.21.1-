@@ -15,7 +15,8 @@
     "PlayerReachMixin",
     "LivingEntitySwingMixin",
     "EntityRemoveProtectionMixin",
-    "ServerLevelAddProtectionMixin"
+    "ServerLevelAddProtectionMixin",
+    "ServerLevelDamageFlashProtectionMixin"
   ],
   "client": [
     "AbstractContainerScreenAccessor"

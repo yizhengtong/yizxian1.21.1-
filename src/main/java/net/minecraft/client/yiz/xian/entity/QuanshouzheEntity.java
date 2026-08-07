@@ -87,6 +87,18 @@ public class QuanshouzheEntity extends YizxianMob {
     private static final int CONDUCTION_HIT_CD_FALLBACK = 20;
     private long lastConductionHitTick = Long.MIN_VALUE;
 
+    /**
+     * 传导扣血红闪标记（ThreadLocal）：hurt() 传导扣血成功后置 true，用于 Level.broadcastDamageEvent Mixin
+     * 判断「本次红闪是否来自本模组传导流程」。寰宇支配等外部模组直接调 victim.level().broadcastDamageEvent
+     * 绕过 hurt() 时标记为 false → Mixin 拦截 → 不疯狂变红。
+     */
+    private static final ThreadLocal<Boolean> CONDUCTION_HIT_FLASH = ThreadLocal.withInitial(() -> false);
+
+    /** 当前是否在传导扣血红闪流程（供 Level Mixin 查询）。 */
+    public static boolean isConductionHitFlash() {
+        return CONDUCTION_HIT_FLASH.get();
+    }
+
     /** 读传导受击 CD = 无敌帧属性 INVINCIBILITY_MULT 的时间（用户定：传导 CD 就是无敌帧定义的时间）。
      *  跟随无敌帧属性实时变动（编辑工具改 INVINCIBILITY_MULT → 传导 CD 同步变）；未挂载/为 0 → 保底 20tick。 */
     private long conductionHitCdTicks() {
@@ -446,6 +458,26 @@ public class QuanshouzheEntity extends YizxianMob {
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
+        // ═══ 防 DataParameter 直写秒杀（more_avaritia 神明之剑等）═══
+        // 外部模组绕过 setHealth override 直接 entityData.set(DATA_HEALTH_ID, 0)（如 more_avaritia
+        // InfinityUtils.forceSetHealth）→ 客户端 getHealth 读 DataParameter 得 0 → 触发死亡/移除。
+        // 每 tick 把 vanilla health 字段 + DATA_HEALTH_ID 写回外部表真值，纠正一切外部 DataParameter 篡改
+        // （flashfur negateHealthDeltaSyncedData 同思路）。catchSetTrueHealth 经反射写字段+DataParameter。
+        try {
+            float realHp = net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this);
+            net.minecraft.client.yiz.tool.health.EntityActuallyHurt.catchSetTrueHealth(this, realHp);
+        } catch (Throwable ignored) {}
+
+        // ═══ 防 removed/removalReason 字段直写（more_avaritia 神明之剑，致命）═══
+        // InfinityUtils.killEntity 用 Unsafe/反射直接 putfield 改 removalReason=DISCARDED + removed=true
+        // （绕过 remove/setRemoved 方法）。DISCARDED.shouldSave()=false → saveAsPassenger 返回 false →
+        // 退出存档不写入 mca → 重进消失。逻辑血量>0 时每 tick 用反射清空这两个字段（flashfur
+        // 实体永不真正移除的落地）。反射缓存字段偏移，避免每 tick 反射开销。
+        try {
+            if (net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this) > 0 && this.isRemoved()) {
+                clearForcedRemoved();
+            }
+        } catch (Throwable ignored) {}
         // 仇恨系统：从仇恨列表选最近的存活仇恨实体作为攻击目标
         this.updateTargetFromHate();
         this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
@@ -494,8 +526,11 @@ public class QuanshouzheEntity extends YizxianMob {
 
     @Override
     public float getHealth() {
-        if (level().isClientSide()) return super.getHealth(); // 客户端读 vanilla（血条显示用，服务端权威）
-        return net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this);
+        if (net.minecraft.client.yiz.tool.health.SecureHealthClosure.isRegistered(this)) {
+            // 服务端 + 客户端都读外部表（客户端经 S2C 同步真值）——防 DataParameter 直写秒杀
+            return net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this);
+        }
+        return super.getHealth(); // 未注册（生成初期/客户端尚未同步）→ vanilla
     }
 
     @Override
@@ -508,15 +543,101 @@ public class QuanshouzheEntity extends YizxianMob {
             return;
         }
         // 扣血方向：重定向到 hurt() 走传导限伤（最多扣 maxHealth×CONDUCTION_CAP%）——防 setHealth(0) 秒杀
-        net.minecraft.client.yiz.tizMod.LOGGER.info("[QSZ] setHealth {} (current={}) → hurt generic",
-            health, current);
         this.hurt(this.damageSources().generic(), current - health);
     }
 
     @Override
     public boolean isAlive() {
-        if (level().isClientSide()) return super.isAlive();
         return !isRemoved() && net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this) > 0;
+    }
+
+    /**
+     * 主动移除标记（ThreadLocal）：YizieManager 血量归零主动移除前 set，remove/setRemoved 据此放行。
+     * 其余一切外部 setRemoved（more_avaritia 秒杀残留、其他模组）一律拦截——实体永不从保存列表移除。
+     */
+    private static final ThreadLocal<Boolean> FORCE_REMOVE = ThreadLocal.withInitial(() -> false);
+
+    /** 标记主动移除（YizieManager 调用前）。 */
+    public static void beginForceRemove() { FORCE_REMOVE.set(true); }
+    public static void endForceRemove() { FORCE_REMOVE.remove(); }
+
+    /** removalReason / removed 字段反射句柄（缓存，防每 tick 反射开销）。 */
+    private static java.lang.reflect.Field REMOVAL_REASON_FIELD;
+    private static java.lang.reflect.Field REMOVED_FIELD;
+    private static volatile boolean REMOVED_FIELDS_READY;
+
+    /**
+     * 强制保存（防 more_avaritia 直写 removalReason=DISCARDED 导致退出存档不保存）。
+     * 原版 saveAsPassenger：removalReason.shouldSave()=false（DISCARDED/KILLED）→ 返回 false 不写 mca。
+     * 逻辑血量>0 时强制跳过该检查直接写 id + saveWithoutId——实体必被保存，重进不消失。
+     */
+    @Override
+    public boolean saveAsPassenger(net.minecraft.nbt.CompoundTag compound) {
+        if (net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this) > 0) {
+            String s = this.getEncodeId();
+            if (s == null) return false;
+            compound.putString("id", s);
+            this.saveWithoutId(compound);
+            return true;
+        }
+        return super.saveAsPassenger(compound);
+    }
+
+    /** 清空被外部模组直写的 removed/removalReason 字段（more_avaritia killEntity 用 Unsafe 直改，绕过 remove/setRemoved）。 */
+    private void clearForcedRemoved() {
+        if (!REMOVED_FIELDS_READY) {
+            try {
+                REMOVAL_REASON_FIELD = net.minecraft.world.entity.Entity.class.getDeclaredField("removalReason");
+                REMOVAL_REASON_FIELD.setAccessible(true);
+                REMOVED_FIELD = net.minecraft.world.entity.Entity.class.getDeclaredField("removed");
+                REMOVED_FIELD.setAccessible(true);
+                REMOVED_FIELDS_READY = true;
+            } catch (Throwable ignored) {}
+        }
+        if (REMOVAL_REASON_FIELD == null || REMOVED_FIELD == null) return;
+        try {
+            REMOVAL_REASON_FIELD.set(this, null);
+            REMOVED_FIELD.setBoolean(this, false);
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * 拦截外部移除（flashfur remove/setRemoved 空实现同思路）。
+     * 实体从 entity section 移除后，PersistentEntitySectionManager 保存流程不再包含它 → 退出存档不保存。
+     * 只放行：①我们主动移除（FORCE_REMOVE，YizieManager 血量归零）②实体逻辑血量确实 ≤0。
+     * 其余（more_avaritia setRemoved 残留等）一律拦截 → 辖界者必被保存。
+     */
+    @Override
+    public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
+        if (!level().isClientSide()
+                && !FORCE_REMOVE.get()
+                && net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this) > 0) {
+            // 【诊断】记录拦截的外部移除（打印调用栈首帧来源）
+            net.minecraft.client.yiz.tizMod.LOGGER.info("[QSZ] remove 拦截 reason={} hp={} caller={}",
+                reason, net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this),
+                Thread.currentThread().getStackTrace()[4]);
+            return; // 拦截外部移除
+        }
+        super.remove(reason);
+    }
+
+    /**
+     * 强制实体必被保存（flashfur shouldBeSaved 思路）。
+     * 原版 shouldBeSaved：removalReason 为 KILLED/DISCARDED（shouldSave=false）→ 实体不写 mca。
+     * 服务器停止/外部模组 setRemoved 辖界者（我们的移除保护对服务器停止放行）→ removalReason 被设 →
+     * 退出存档不保存 → 重进消失。恒 true 保证辖界者血量未归零时必保存（即使被 setRemoved）。
+     */
+    @Override
+    public boolean shouldBeSaved() {
+        boolean reg = net.minecraft.client.yiz.tool.health.SecureHealthClosure.isRegistered(this);
+        float hp = net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this);
+        // 【诊断】记录保存判定
+        if (reg && hp > 0) {
+            net.minecraft.client.yiz.tizMod.LOGGER.info("[QSZ] shouldBeSaved=true reg={} hp={} removed={}",
+                reg, hp, this.isRemoved());
+            return true;
+        }
+        return super.shouldBeSaved();
     }
 
     /**
@@ -547,7 +668,6 @@ public class QuanshouzheEntity extends YizxianMob {
 
     @Override
     public boolean isDeadOrDying() {
-        if (level().isClientSide()) return super.isDeadOrDying();
         return net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this) <= 0;
     }
 
@@ -612,10 +732,18 @@ public class QuanshouzheEntity extends YizxianMob {
                 source.getMsgId(), amount, cap, limited, current, next);
         }
 
-        // 受伤反馈（红闪/音效）
+        // 受伤反馈（红闪/音效）：用原版正确的 broadcastDamageEvent 触发客户端 handleDamageEvent → hurtTime=10 → 变红。
+        // （不能用 broadcastEntityEvent(2)——那不是红闪链路，普通攻击会不红。）
+        // ThreadLocal 标记本次红闪来自传导流程 → Level.broadcastDamageEvent Mixin 据此放行，
+        // 拦截寰宇支配等外部模组绕过 hurt() 直接调 broadcastDamageEvent 的疯狂变红。
         this.hurtTime = 10;
         this.hurtDuration = 10;
-        this.level().broadcastEntityEvent(this, (byte) 2);
+        CONDUCTION_HIT_FLASH.set(true);
+        try {
+            this.level().broadcastDamageEvent(this, source);
+        } finally {
+            CONDUCTION_HIT_FLASH.remove();
+        }
 
         // 无敌帧激活（受击后 N tick 完全无敌，= 传导 CD）
         net.minecraft.client.yiz.handler.AttackInvulnerabilityTracker.onHurtSuccess(this, this.level().getGameTime());
@@ -704,5 +832,31 @@ public class QuanshouzheEntity extends YizxianMob {
                 this.setPose(net.minecraft.world.entity.Pose.DYING);
             }
         }
+    }
+
+    // ═══ 血量外部表持久化（flashfur HEALTH_TAG 同思路）═══
+    // 外部表是纯内存，退出存档销毁。若不持久化，重进存档后 isRegistered=false → getHealth 回退 vanilla，
+    // 而 more_avaritia 攻击留下的 vanilla health=0 / deathTime 残留 → 原版 tickDeath → 实体被移除。
+
+    @Override
+    public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        // 存外部表真值血量（原版 Health 存 getHealth() 已走 override 是真值，但显式存一份自定义 tag 保险）
+        tag.putFloat("yizxianmod_boss_health", net.minecraft.client.yiz.tool.health.SecureHealthClosure.getHealth(this));
+    }
+
+    @Override
+    public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        // 恢复外部表血量：先注册再写（applyEntityAttributes 第一 tick 会再 register putIfAbsent，不覆盖）
+        if (tag.contains("yizxianmod_boss_health", net.minecraft.nbt.Tag.TAG_FLOAT)) {
+            float hp = tag.getFloat("yizxianmod_boss_health");
+            net.minecraft.client.yiz.tool.health.SecureHealthClosure.register(this, hp);
+            net.minecraft.client.yiz.tool.health.SecureHealthClosure.setHealth(this, hp);
+        }
+        // 清死亡残留：防 more_avaritia 攻击留下 deathTime/dead → 重进被原版 tickDeath 移除
+        this.dead = false;
+        this.deathTime = 0;
+        this.hurtTime = 0;
     }
 }
