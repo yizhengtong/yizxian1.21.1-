@@ -190,12 +190,14 @@ public abstract class YizxianMob extends Mob implements PoshiBearer {
         if (hp != null) {
             if (this.templateMaxHealth < 0) this.templateMaxHealth = hp.getBaseValue();
             // 难度变化时保持「已损生命比例」：改 maxHealth 前记录当前比例，改后按比例缩放当前生命，
-            // 否则只变上限、当前值不变，血条比例会错乱（如 400/400 满血切普通若只剩上限变化会变 300/400）
-            double oldMax = this.getMaxHealth();
+            // 否则只变上限、当前值不变，血条比例会错乱（如 400/400 满血切普通若只剩上限变化会变 300/400）。
+            // 注意：用 getAttributeValue 而非 getMaxHealth()（后者被子类 override 返回受保护值，
+            // 会导致 oldMax 恒 == 新值 → 比例缩放失效）。
+            double oldMax = this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
             float ratio = oldMax > 0 ? this.getHealth() / (float) oldMax : 1.0F;
             hp.setBaseValue(this.templateMaxHealth * mult);
-            if (oldMax != this.getMaxHealth() && ratio > 0) {
-                this.setHealth((float) (this.getMaxHealth() * ratio));
+            if (oldMax != this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH) && ratio > 0) {
+                this.setHealth((float) (this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH) * ratio));
             }
         }
         if (atk != null) {

@@ -202,6 +202,8 @@ public class QuanshouzheEntity extends YizxianMob {
         // 血量外部存储（flashfur 式）：真实血量在 SecureHealthClosure 哈希表，首次以当前血量注册
         EntityAttributeGate.set(this, YizAttributes.SECURE_PULSE, "secure_pulse", 1.0);
         net.minecraft.client.yiz.tool.health.SecureHealthClosure.register(this, (float) this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH));
+        // 记录受保护最大生命值（难度缩放后的 vanilla maxHealth）——getMaxHealth() override 返回它，防外部改 MAX_HEALTH 属性
+        net.minecraft.client.yiz.tool.health.SecureHealthClosure.setMaxHealth(this, (float) this.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH));
         // 健康值字段写入守卫：登记为受管理自研血量实体（拦截外部直接写真实血量字段回血）
         net.minecraft.client.yiz.tool.health.HealthWriteGuard.register(this);
     }
@@ -478,6 +480,19 @@ public class QuanshouzheEntity extends YizxianMob {
                 clearForcedRemoved();
             }
         } catch (Throwable ignored) {}
+
+        // ═══ 防 MAX_HEALTH 属性被外部改（tianshaxing MaxHealthDrain 等）═══
+        // 外部模组给 Attributes.MAX_HEALTH 加 permanent modifier 降低最大生命值（如 tianshaxing
+        // reduceMaxHealth → addPermanentModifier）。每 tick 检查属性值是否偏离我们记录的受保护
+        // maxHealth（applyEntityAttributes 难度缩放后记录）——偏离则移除所有 modifier + setBaseValue 恢复。
+        try {
+            var hpInst = this.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
+            float protectedMax = net.minecraft.client.yiz.tool.health.SecureHealthClosure.getMaxHealth(this);
+            if (hpInst != null && hpInst.getValue() != protectedMax && protectedMax > 0) {
+                hpInst.setBaseValue(protectedMax);
+                hpInst.removeModifiers(); // 清外部加的 MAX_HEALTH modifier（MAX_HEALTH 无本模组 prot_ modifier，安全）
+            }
+        } catch (Throwable ignored) {}
         // 仇恨系统：从仇恨列表选最近的存活仇恨实体作为攻击目标
         this.updateTargetFromHate();
         this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
@@ -532,6 +547,7 @@ public class QuanshouzheEntity extends YizxianMob {
         }
         return super.getHealth(); // 未注册（生成初期/客户端尚未同步）→ vanilla
     }
+
 
     @Override
     public void setHealth(float health) {
